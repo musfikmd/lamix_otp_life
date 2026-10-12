@@ -1,0 +1,6 @@
+{
+  "admin_password": "WHALE@123",
+  "withdraw_enabled": true,
+  "min_withdraw": 20,
+  "support_username": "OTP_LIFE_bot"
+}

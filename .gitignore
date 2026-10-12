@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+client/node_modules/
+
+# Environment and sensitive keys
+.env
+.env.local
+.env.*
+!.env.example
+
+# Large binary tools
+cloudflared.exe
+*.exe
+
+# Build outputs
+client/dist/
+dist/
+
+# Logs and scratch
+*.log
+scratch/
+.system_generated/
+.DS_Store
+Thumbs.db

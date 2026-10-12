@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: #FAF7F2;
+    color: #26160F;
+    overflow-x: hidden;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  code, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Custom Scrollbar for Telegram webview */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(92, 56, 36, 0.18);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(92, 56, 36, 0.35);
+}
+
+/* Luxury Warm White & Mocha Brown Glass Panels */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(92, 56, 36, 0.1);
+}
+
+.glass-card {
+  background: #FFFFFF;
+  border: 1px solid #EFE8DE;
+  box-shadow: 0 4px 20px -2px rgba(74, 46, 31, 0.04);
+}
+
+.glow-brown {
+  box-shadow: 0 0 25px -5px rgba(92, 56, 36, 0.2);
+}
+
+.glow-caramel {
+  box-shadow: 0 0 25px -5px rgba(194, 130, 72, 0.25);
+}
