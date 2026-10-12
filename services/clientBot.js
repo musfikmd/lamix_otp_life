@@ -97,13 +97,21 @@ class ClientBot {
       total_sms: 0
     };
 
-    await this.supabase.from('users').insert(newUser).catch(() => {});
+    try {
+      await this.supabase.from('users').insert(newUser);
+    } catch (err) {
+      // Ignore unique constraint or minor insert warnings
+    }
 
     if (referrerId && Number(referrerId) !== tgId) {
-      await this.supabase.from('referrals').insert({
-        referrer_id: Number(referrerId),
-        referred_id: tgId
-      }).catch(() => {});
+      try {
+        await this.supabase.from('referrals').insert({
+          referrer_id: Number(referrerId),
+          referred_id: tgId
+        });
+      } catch (err) {
+        // Ignore duplicate referral
+      }
     }
 
     return newUser;
