@@ -97,6 +97,7 @@ if (CLIENT_BOT_TOKEN && ADMIN_BOT_TOKEN) {
 
   // Start polling
   clientBot.startPolling();
+  clientBot.setGlobalMenuButton().catch(() => {});
   adminBot.startPolling();
   cdrPoller.start();
 
