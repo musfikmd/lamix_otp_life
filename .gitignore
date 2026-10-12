@@ -3,9 +3,10 @@ node_modules/
 client/node_modules/
 
 # Environment and sensitive keys
-.env
+# .env (tracked per user request)
 .env.local
 .env.*
+!.env
 !.env.example
 
 # Large binary tools
