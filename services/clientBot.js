@@ -194,15 +194,29 @@ class ClientBot {
       `📨 <b>Total SMS:</b> <b>${user?.total_sms || 0}</b>\n\n` +
       `👇 <i>Tap the button below to launch the Mini App:</i>`;
 
-    const inlineMarkup = {
-      inline_keyboard: [
-        [
-          { text: '🚀 Open OTP LIFE App', web_app: { url: this.webAppUrl } }
-        ]
+    const ads = settingsManager.get('ads') || {};
+    let fullWelcomeText = welcomeText;
+    if (ads.bot_ad_enabled && ads.bot_ad_text) {
+      fullWelcomeText += `\n\n📢 <b>Sponsored:</b> <i>${escapeHtml(ads.bot_ad_text)}</i>`;
+    }
+
+    const inlineKeyboard = [
+      [
+        { text: '🚀 Open OTP LIFE App', web_app: { url: this.webAppUrl } }
       ]
+    ];
+
+    if (ads.bot_ad_enabled && ads.bot_ad_button_url) {
+      inlineKeyboard.push([
+        { text: ads.bot_ad_button_text || '📢 Official Channel', url: ads.bot_ad_button_url }
+      ]);
+    }
+
+    const inlineMarkup = {
+      inline_keyboard: inlineKeyboard
     };
 
-    await this.sendMessage(chatId, welcomeText, inlineMarkup);
+    await this.sendMessage(chatId, fullWelcomeText, inlineMarkup);
   }
 
   // Real-time OTP Alert Triggered by Lamix CDR Poller Loop
@@ -213,8 +227,9 @@ class ClientBot {
     const safeContent = escapeHtml(content || 'No content');
     const safeServiceName = serviceName ? escapeHtml(serviceName) : null;
     const safeOtp = displayOtp ? escapeHtml(displayOtp) : null;
+    const ads = settingsManager.get('ads') || {};
 
-    const msg =
+    let msg =
       `📨 <b>New SMS Received!</b>\n` +
       `━━━━━━━━━━━━━━━━━━━\n` +
       `📲 <b>Number:</b> <code>${cleanNum}</code>\n` +
@@ -225,11 +240,23 @@ class ClientBot {
       (safeOtp ? `🔑 <b>OTP Code:</b> <code>${safeOtp}</code>\n` : '') +
       `💵 <b>Earned:</b> <b>+৳${Number(payoutBdt).toFixed(2)} BDT</b>`;
 
+    if (ads.bot_ad_enabled && ads.bot_ad_text) {
+      msg += `\n\n📢 <i>${escapeHtml(ads.bot_ad_text)}</i>`;
+    }
+
+    const inlineKeyboard = [
+      ...(displayOtp ? [[{ text: `📋 Copy OTP: ${displayOtp}`, callback_data: `copy_otp_${displayOtp}` }]] : []),
+      [{ text: '🚀 Open OTP LIFE App', web_app: { url: this.webAppUrl } }]
+    ];
+
+    if (ads.bot_ad_enabled && ads.bot_ad_button_url) {
+      inlineKeyboard.push([
+        { text: ads.bot_ad_button_text || '📢 Official Channel', url: ads.bot_ad_button_url }
+      ]);
+    }
+
     const buttons = {
-      inline_keyboard: [
-        ...(displayOtp ? [[{ text: `📋 Copy OTP: ${displayOtp}`, callback_data: `copy_otp_${displayOtp}` }]] : []),
-        [{ text: '🚀 Open OTP LIFE App', web_app: { url: this.webAppUrl } }]
-      ]
+      inline_keyboard: inlineKeyboard
     };
 
     await this.sendMessage(tgId, msg, buttons);
@@ -308,10 +335,19 @@ class ClientBot {
       `⚡ <b>Welcome to OTP LIFE</b>\n\n` +
       `Tap below to launch the Mini App to claim numbers, view SMS & withdraw earnings:`;
 
+    const ads = settingsManager.get('ads') || {};
+    const inlineKeyboard = [
+      [{ text: '🚀 Open OTP LIFE App', web_app: { url: this.webAppUrl } }]
+    ];
+
+    if (ads.bot_ad_enabled && ads.bot_ad_button_url) {
+      inlineKeyboard.push([
+        { text: ads.bot_ad_button_text || '📢 Official Channel', url: ads.bot_ad_button_url }
+      ]);
+    }
+
     const buttons = {
-      inline_keyboard: [
-        [{ text: '🚀 Open OTP LIFE App', web_app: { url: this.webAppUrl } }]
-      ]
+      inline_keyboard: inlineKeyboard
     };
 
     await this.sendRequest('sendMessage', {

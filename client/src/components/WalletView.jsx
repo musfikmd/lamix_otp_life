@@ -6,10 +6,15 @@ import {
   ArrowUpRight, 
   CreditCard, 
   AlertCircle, 
-  CheckCircle2 
+  CheckCircle2,
+  Sparkles,
+  ExternalLink,
+  X,
+  ShieldCheck
 } from 'lucide-react';
+import { BannerAd } from './BannerAd';
 
-export const WalletView = ({ onWithdrawSubmit }) => {
+export const WalletView = ({ onWithdrawSubmit, ads = null }) => {
   const { user, setUser, triggerHaptic } = useTelegram();
   const [selectedMethod, setSelectedMethod] = useState(WITHDRAWAL_METHODS[0]);
   const [amount, setAmount] = useState('');
@@ -17,6 +22,11 @@ export const WalletView = ({ onWithdrawSubmit }) => {
   const [withdrawals, setWithdrawals] = useState([]);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Withdrawal Ad Modal State
+  const [pendingWithdrawData, setPendingWithdrawData] = useState(null);
+  const [showWithdrawAdModal, setShowWithdrawAdModal] = useState(false);
+  const [isSubmittingWithdraw, setIsSubmittingWithdraw] = useState(false);
 
   // Fetch real user withdrawals
   useEffect(() => {
@@ -31,7 +41,7 @@ export const WalletView = ({ onWithdrawSubmit }) => {
       .catch(() => {});
   }, [user?.id]);
 
-  const handleWithdraw = async (e) => {
+  const handleWithdrawInitiate = (e) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
@@ -61,6 +71,37 @@ export const WalletView = ({ onWithdrawSubmit }) => {
       return;
     }
 
+    // Save pending details and open the sponsor ad verification modal!
+    setPendingWithdrawData({
+      withdrawAmount,
+      method: selectedMethod.name,
+      walletAddress: walletAddress.trim()
+    });
+    setShowWithdrawAdModal(true);
+    triggerHaptic('medium');
+  };
+
+  const handleConfirmWithdrawWithAd = async (openAd = true) => {
+    if (!pendingWithdrawData) return;
+    const { withdrawAmount, method, walletAddress } = pendingWithdrawData;
+    setIsSubmittingWithdraw(true);
+
+    if (openAd) {
+      triggerHaptic('heavy');
+      const directLink = ads?.adsterra_direct_link || ads?.popup_cta_link || 'https://asiafilm.org/4/5119383ac8d97b3d9c83e75c3ce3e9b3';
+      try {
+        if (window.Telegram?.WebApp?.openLink) {
+          window.Telegram.WebApp.openLink(directLink);
+        } else if (window.Telegram?.WebApp?.openTelegramLink && directLink.includes('t.me')) {
+          window.Telegram.WebApp.openTelegramLink(directLink);
+        } else {
+          window.open(directLink, '_blank');
+        }
+      } catch (err) {
+        window.open(directLink, '_blank');
+      }
+    }
+
     try {
       const res = await fetch('/api/withdraw', {
         method: 'POST',
@@ -68,12 +109,15 @@ export const WalletView = ({ onWithdrawSubmit }) => {
         body: JSON.stringify({
           userId: user?.id,
           amount: withdrawAmount,
-          method: selectedMethod.name,
-          walletAddress: walletAddress.trim()
+          method,
+          walletAddress
         })
       });
 
       const data = await res.json();
+      setIsSubmittingWithdraw(false);
+      setShowWithdrawAdModal(false);
+
       if (!res.ok || !data.success) {
         setErrorMsg(data.error || 'Withdrawal request failed!');
         triggerHaptic('error');
@@ -84,8 +128,8 @@ export const WalletView = ({ onWithdrawSubmit }) => {
       const newWd = {
         id: String(data.withdrawal.id),
         amount: withdrawAmount,
-        method: selectedMethod.name,
-        walletAddress: walletAddress.trim(),
+        method,
+        walletAddress,
         status: 'PENDING',
         date: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
       };
@@ -94,6 +138,7 @@ export const WalletView = ({ onWithdrawSubmit }) => {
       setSuccessMsg(`৳${withdrawAmount} BDT withdrawal request submitted! Payment will be sent upon admin approval.`);
       setAmount('');
       setWalletAddress('');
+      setPendingWithdrawData(null);
 
       if (setUser) {
         setUser((prev) => ({
@@ -107,6 +152,8 @@ export const WalletView = ({ onWithdrawSubmit }) => {
         onWithdrawSubmit(newWd);
       }
     } catch (err) {
+      setIsSubmittingWithdraw(false);
+      setShowWithdrawAdModal(false);
       setErrorMsg('Server connection error. Please try again!');
       triggerHaptic('error');
     }
@@ -160,6 +207,9 @@ export const WalletView = ({ onWithdrawSubmit }) => {
         </div>
       </div>
 
+      {/* Monetization / Sponsor Banner Ad */}
+      <BannerAd ads={ads} slot="wallet" />
+
       {/* Withdrawal Form */}
       <div className="p-5 rounded-3xl bg-[#FFFFFF] border border-[#EBE3D8] shadow-sm space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-[#F0E8DE]">
@@ -186,7 +236,7 @@ export const WalletView = ({ onWithdrawSubmit }) => {
           </div>
         )}
 
-        <form onSubmit={handleWithdraw} className="space-y-4">
+        <form onSubmit={handleWithdrawInitiate} className="space-y-4">
           {/* Method selector */}
           <div>
             <label className="text-xs font-bold text-[#4A2E1F] block mb-2 uppercase tracking-wider">
@@ -323,6 +373,68 @@ export const WalletView = ({ onWithdrawSubmit }) => {
           </div>
         )}
       </div>
+
+      {/* Withdrawal Sponsor Ad Verification Modal */}
+      {showWithdrawAdModal && pendingWithdrawData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
+          <div className="w-full max-w-sm bg-gradient-to-b from-[#2E190E] via-[#3B2215] to-[#26160F] border border-[#784A33]/50 rounded-3xl p-5 shadow-2xl space-y-4 text-white relative overflow-hidden animate-slide-up">
+            <div className="flex items-center justify-between pb-2 border-b border-white/10">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-400/15 border border-amber-400/30 text-amber-300 text-[10px] font-black uppercase tracking-wider">
+                <Sparkles className="w-3 h-3 text-amber-400" />
+                <span>Withdrawal Sponsor Verification</span>
+              </div>
+              <button
+                onClick={() => setShowWithdrawAdModal(false)}
+                className="w-7 h-7 rounded-full bg-white/10 text-stone-300 hover:text-white flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-center py-1">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-300 flex items-center justify-center mx-auto text-xl">
+                💳
+              </div>
+              <h3 className="text-base font-black text-white">
+                Confirm ৳{pendingWithdrawData.withdrawAmount} BDT Payout
+              </h3>
+              <p className="text-xs text-[#E8D7CC] leading-relaxed">
+                To process your withdrawal to <b>{pendingWithdrawData.method}</b> with <b>0% fee</b>, please view this sponsored partner offer to verify your request.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-black/40 border border-white/10 flex items-center justify-between text-xs">
+              <div>
+                <span className="text-[10px] text-stone-400 block">Payout Account:</span>
+                <span className="font-mono font-bold text-amber-300">{pendingWithdrawData.walletAddress}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-stone-400 block">Amount:</span>
+                <span className="font-mono font-bold text-emerald-400">৳{pendingWithdrawData.withdrawAmount} BDT</span>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <button
+                onClick={() => handleConfirmWithdrawWithAd(true)}
+                disabled={isSubmittingWithdraw}
+                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:brightness-110 active:scale-98 text-white font-extrabold text-xs shadow-xl shadow-amber-600/25 transition-all flex items-center justify-center gap-2 border border-amber-400/40"
+              >
+                <span>{isSubmittingWithdraw ? 'Processing Withdrawal...' : '🚀 View Sponsor & Submit Payout'}</span>
+                <ExternalLink className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => handleConfirmWithdrawWithAd(false)}
+                disabled={isSubmittingWithdraw}
+                className="w-full py-1 text-center text-[11px] text-stone-400 hover:text-white transition-colors"
+              >
+                Submit without offer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

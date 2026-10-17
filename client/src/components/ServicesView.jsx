@@ -2,8 +2,9 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useTelegram } from '../context/TelegramContext';
 import { CATEGORIES, SERVICES } from '../data/servicesData';
 import { Search, Zap, ArrowUpRight } from 'lucide-react';
+import { BannerAd } from './BannerAd';
 
-export const ServicesView = ({ onSelectService }) => {
+export const ServicesView = ({ onSelectService, ads = null }) => {
   const { triggerHaptic } = useTelegram();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -106,6 +107,9 @@ export const ServicesView = ({ onSelectService }) => {
           );
         })}
       </div>
+
+      {/* Monetization / Sponsor Banner Ad */}
+      <BannerAd ads={ads} slot="services" />
 
       {/* Services Grid */}
       <div className="grid grid-cols-2 gap-3">

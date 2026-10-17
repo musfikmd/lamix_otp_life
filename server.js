@@ -621,8 +621,31 @@ app.get('/api/admin/overview', async (req, res) => {
       time: new Date(w.requested_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     })),
     services: enrichedServices,
-    mappings: enrichedMappings
+    mappings: enrichedMappings,
+    ads: settingsManager.get('ads')
   });
+});
+
+// Public Get Ad Settings for Mini App & Telegram Client
+app.get('/api/ads', (req, res) => {
+  const ads = settingsManager.get('ads') || {};
+  res.json({ success: true, ads });
+});
+
+// Admin Update Ad Settings
+app.post('/api/admin/ads', async (req, res) => {
+  const newAds = req.body;
+  if (!newAds || typeof newAds !== 'object') {
+    return res.status(400).json({ error: 'Invalid ads payload' });
+  }
+  try {
+    const current = settingsManager.get('ads') || {};
+    const updated = { ...current, ...newAds };
+    settingsManager.set('ads', updated);
+    res.json({ success: true, ads: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Admin Get Available Ranges from Lamix Pool

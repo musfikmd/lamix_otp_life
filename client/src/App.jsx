@@ -8,6 +8,7 @@ import { WalletView } from './components/WalletView';
 import { ReferralView } from './components/ReferralView';
 import { ClaimServiceModal } from './components/ClaimServiceModal';
 import { AdminDashboardView } from './components/AdminDashboardView';
+import { AdPopupModal } from './components/AdPopupModal';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 
 
@@ -19,6 +20,42 @@ function MainApp() {
   const [activeNumbers, setActiveNumbers] = useState([]);
   const [smsMessages, setSmsMessages] = useState([]);
   const [toast, setToast] = useState(null);
+  const [ads, setAds] = useState(null);
+  const [showPopupAd, setShowPopupAd] = useState(true);
+
+  // Load public ad configuration (Adsterra & Sponsors)
+  useEffect(() => {
+    fetch('/api/ads')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.success && data.ads) {
+          setAds(data.ads);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Automatic View-Based CPM Script Injector (Social Bar / Popunder)
+  useEffect(() => {
+    if (!ads || ads.cpm_views_enabled === false) return;
+    const raw = (ads.cpm_script_src || ads.cpm_script_code || '').trim();
+    if (!raw) return;
+
+    let src = raw;
+    const srcMatch = raw.match(/src=['"]([^'"]+)['"]/i);
+    if (srcMatch) {
+      src = srcMatch[1];
+    }
+
+    if (src && !document.getElementById('adsterra-cpm-view-script')) {
+      const script = document.createElement('script');
+      script.id = 'adsterra-cpm-view-script';
+      script.type = 'text/javascript';
+      script.src = src.startsWith('//') ? `https:${src}` : src;
+      script.async = true;
+      document.head.appendChild(script);
+    }
+  }, [ads]);
 
   // Check if opened with ?admin=true
   useEffect(() => {
@@ -150,7 +187,7 @@ function MainApp() {
 
           <main className="flex-1 overflow-y-auto">
             {activeTab === 'services' && (
-              <ServicesView onSelectService={(s) => setSelectedService(s)} />
+              <ServicesView onSelectService={(s) => setSelectedService(s)} ads={ads} />
             )}
 
             {activeTab === 'inbox' && (
@@ -158,11 +195,13 @@ function MainApp() {
                 activeNumbers={activeNumbers}
                 smsMessages={smsMessages}
                 onReleaseNumber={handleReleaseNumber}
+                ads={ads}
               />
             )}
 
             {activeTab === 'wallet' && (
               <WalletView
+                ads={ads}
                 onWithdrawSubmit={(wd) => {
                   setUser((prev) => ({
                     ...prev,
@@ -175,6 +214,11 @@ function MainApp() {
 
             {activeTab === 'referral' && <ReferralView />}
           </main>
+
+          {/* Startup Interstitial Popup Ad */}
+          {showPopupAd && ads?.popup_enabled !== false && (
+            <AdPopupModal ads={ads} onClose={() => setShowPopupAd(false)} />
+          )}
 
           {selectedService && (
             <ClaimServiceModal

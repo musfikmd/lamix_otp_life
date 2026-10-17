@@ -8,11 +8,13 @@ import {
   MessageSquare,
   Phone
 } from 'lucide-react';
+import { BannerAd } from './BannerAd';
 
 export const InboxView = ({ 
   activeNumbers = [], 
   smsMessages = [], 
-  onReleaseNumber 
+  onReleaseNumber,
+  ads = null
 }) => {
   const { triggerHaptic } = useTelegram();
   const [copiedKey, setCopiedKey] = useState(null);
@@ -108,6 +110,9 @@ export const InboxView = ({
           </span>
         </button>
       </div>
+
+      {/* Monetization / Sponsor Banner Ad */}
+      <BannerAd ads={ads} slot="inbox" />
 
       {/* Active Numbers Section */}
       {activeTab === 'numbers' && (

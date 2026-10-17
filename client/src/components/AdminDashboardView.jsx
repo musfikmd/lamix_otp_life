@@ -47,9 +47,58 @@ export const AdminDashboardView = () => {
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [toastMsg, setToastMsg] = useState(null);
 
+  // Adsterra & Ads Settings
+  const [adsSettings, setAdsSettings] = useState({
+    popup_enabled: true,
+    adsterra_direct_link: '',
+    popup_title: '🔥 Join Official Telegram Channel!',
+    popup_desc: 'Get live number restock alerts, special high-paying OTP rates & 24/7 priority admin support.',
+    popup_image: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80',
+    popup_cta_text: '🚀 Join Channel Now',
+    popup_cta_link: 'https://t.me/OTP_LIFE_bot',
+    popup_countdown: 3,
+    banner_enabled: true,
+    adsterra_banner_key_320x50: '',
+    banner_title: '💎 Official VIP Community',
+    banner_desc: 'Highest BDT rate per SMS with instant payout approval!',
+    banner_cta_text: 'Join Now',
+    banner_cta_link: 'https://t.me/OTP_LIFE_bot',
+    cpm_views_enabled: true,
+    cpm_script_src: '',
+    bot_ad_enabled: true,
+    bot_ad_text: 'Join @OTP_LIFE_bot for live updates & bonuses!',
+    bot_ad_button_text: '📢 Join Official Channel',
+    bot_ad_button_url: 'https://t.me/OTP_LIFE_bot'
+  });
+  const [isSavingAds, setIsSavingAds] = useState(false);
+
   const showToast = (msg) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3000);
+  };
+
+  const handleSaveAds = async (e) => {
+    e?.preventDefault?.();
+    triggerHaptic('heavy');
+    setIsSavingAds(true);
+    try {
+      const res = await fetch('/api/admin/ads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(adsSettings)
+      });
+      const data = await res.json();
+      setIsSavingAds(false);
+      if (data?.success) {
+        showToast('✅ Adsterra & Ads settings saved successfully!');
+        if (data.ads) setAdsSettings(data.ads);
+      } else {
+        showToast('❌ Failed: ' + (data?.error || 'Unknown error'));
+      }
+    } catch (err) {
+      setIsSavingAds(false);
+      showToast('❌ Server error saving ads');
+    }
   };
 
   const fetchOverview = async () => {
@@ -61,6 +110,7 @@ export const AdminDashboardView = () => {
         if (data.withdrawals) setWithdrawals(data.withdrawals);
         if (data.services) setServices(data.services);
         if (data.mappings) setMappings(data.mappings);
+        if (data.ads) setAdsSettings((prev) => ({ ...prev, ...data.ads }));
 
         if (selectedService) {
           const updatedSelected = (data.services || []).find((s) => s.id === selectedService.id);
@@ -413,6 +463,20 @@ export const AdminDashboardView = () => {
         >
           Range Mapping ({mappings.length})
         </button>
+
+        <button
+          onClick={() => {
+            triggerHaptic('selection');
+            setActiveSubTab('ads');
+          }}
+          className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeSubTab === 'ads'
+              ? 'bg-[#5C3824] text-white shadow-md shadow-[#5C3824]/20'
+              : 'text-[#826A5C] hover:text-[#26160F]'
+          }`}
+        >
+          📢 Adsterra & Ads
+        </button>
       </div>
 
       {/* 1. Pending Withdrawals Tab */}
@@ -651,6 +715,370 @@ export const AdminDashboardView = () => {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* 4. Adsterra & Ads Management Tab */}
+      {activeSubTab === 'ads' && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-3xl bg-gradient-to-r from-[#3B2215] to-[#5C3824] text-white border border-[#784A33]/40 shadow-sm space-y-1">
+            <h3 className="text-sm font-black flex items-center gap-2 text-amber-300">
+              <span>💰 Adsterra Monetization & Ads Center</span>
+            </h3>
+            <p className="text-xs text-[#E8D7CC] leading-relaxed">
+              Configure Adsterra Direct Link (Smartlink) and Banners to earn Dollars ($) from Telegram Mini App & Client Bot traffic.
+            </p>
+          </div>
+
+          {/* Section 1: Adsterra Direct Link (High Revenue) */}
+          <div className="p-4 rounded-3xl bg-white border border-[#EBE3D8] shadow-sm space-y-3">
+            <div className="flex items-center gap-2 pb-2 border-b border-[#F0E8DE]">
+              <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">
+                🔗
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-[#26160F]">
+                  Adsterra Direct Link (Smartlink)
+                </h4>
+                <p className="text-[10px] text-[#826A5C]">
+                  Highest CPM format. Opens when user clicks startup popup CTA or banner.
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-[#4A2E1F] block mb-1">
+                Adsterra Direct Link URL:
+              </label>
+              <input
+                type="url"
+                value={adsSettings.adsterra_direct_link || ''}
+                onChange={(e) => setAdsSettings({ ...adsSettings, adsterra_direct_link: e.target.value })}
+                placeholder="https://www.profitablecpmrate.com/xxxxxxxxx..."
+                className="w-full bg-[#FAF7F2] border border-[#EBE3D8] rounded-xl px-3 py-2 text-xs text-[#26160F] font-mono focus:outline-none focus:border-[#5C3824]"
+              />
+              <span className="text-[10px] text-[#826A5C] mt-1 block">
+                💡 Paste your Smartlink from Adsterra dashboard (Left Menu 🔗 Direct Links).
+              </span>
+            </div>
+          </div>
+
+          {/* Section 1.5: Pay-Per-View CPM Monetization (Social Bar / Popunder Script) */}
+          <div className="p-4 rounded-3xl bg-white border border-[#EBE3D8] shadow-sm space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-[#F0E8DE]">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">
+                  👁️
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-[#26160F]">
+                    Pay-Per-View CPM Ads (Social Bar / Popunder)
+                  </h4>
+                  <p className="text-[10px] text-[#826A5C]">
+                    Earn purely on views (CPM) without requiring users to click any link!
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setAdsSettings({ ...adsSettings, cpm_views_enabled: !adsSettings.cpm_views_enabled });
+                }}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                  adsSettings.cpm_views_enabled !== false
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'bg-stone-200 text-stone-600'
+                }`}
+              >
+                {adsSettings.cpm_views_enabled !== false ? '🟢 ON' : '🔴 OFF'}
+              </button>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-[#4A2E1F] block mb-1">
+                Adsterra Social Bar / Popunder Script URL or Tag:
+              </label>
+              <textarea
+                rows="2"
+                value={adsSettings.cpm_script_src || ''}
+                onChange={(e) => setAdsSettings({ ...adsSettings, cpm_script_src: e.target.value })}
+                placeholder="//pl234567.highperformanceformat.com/xx/yy/invoke.js or <script src='...'></script>"
+                className="w-full bg-[#FAF7F2] border border-[#EBE3D8] rounded-xl px-3 py-2 text-xs text-[#26160F] font-mono focus:outline-none focus:border-[#5C3824]"
+              />
+              <span className="text-[10px] text-[#826A5C] mt-1 block">
+                💡 Paste your Adsterra <b>Social Bar</b> or <b>Popunder</b> script from the Websites tab. This script runs in the background on every app open, generating pure CPM revenue per view!
+              </span>
+            </div>
+          </div>
+
+          {/* Section 2: Startup Interstitial Popup Ad */}
+          <div className="p-4 rounded-3xl bg-white border border-[#EBE3D8] shadow-sm space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-[#F0E8DE]">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-xs">
+                  🚀
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-[#26160F]">
+                    Startup Popup Ad (Every Open)
+                  </h4>
+                  <p className="text-[10px] text-[#826A5C]">
+                    Shows an interstitial popup modal every time user opens the Mini App.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setAdsSettings({ ...adsSettings, popup_enabled: !adsSettings.popup_enabled });
+                }}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                  adsSettings.popup_enabled
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-stone-200 text-stone-600'
+                }`}
+              >
+                {adsSettings.popup_enabled ? '🟢 ON' : '🔴 OFF'}
+              </button>
+            </div>
+
+            <div className="space-y-2.5">
+              <div>
+                <label className="text-[11px] font-bold text-[#4A2E1F] block mb-1">
+                  Ad Headline Title:
+                </label>
+                <input
+                  type="text"
+                  value={adsSettings.popup_title || ''}
+                  onChange={(e) => setAdsSettings({ ...adsSettings, popup_title: e.target.value })}
+                  placeholder="e.g. 🔥 Join Official Telegram Channel!"
+                  className="w-full bg-[#FAF7F2] border border-[#EBE3D8] rounded-xl px-3 py-1.5 text-xs text-[#26160F] focus:outline-none focus:border-[#5C3824]"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-[#4A2E1F] block mb-1">
+                  Ad Description / Subtitle:
+                </label>
+                <textarea
+                  rows="2"
+                  value={adsSettings.popup_desc || ''}
+                  onChange={(e) => setAdsSettings({ ...adsSettings, popup_desc: e.target.value })}
+                  placeholder="Ad description text..."
+                  className="w-full bg-[#FAF7F2] border border-[#EBE3D8] rounded-xl px-3 py-1.5 text-xs text-[#26160F] focus:outline-none focus:border-[#5C3824]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-bold text-[#4A2E1F] block mb-1">
+                    Banner Image URL:
+                  </label>
+                  <input
+                    type="url"
+                    value={adsSettings.popup_image || ''}
+                    onChange={(e) => setAdsSettings({ ...adsSettings, popup_image: e.target.value })}
+                    placeholder="https://..."
+                    className="w-full bg-[#FAF7F2] border border-[#EBE3D8] rounded-xl px-3 py-1.5 text-xs text-[#26160F] font-mono focus:outline-none focus:border-[#5C3824]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-[#4A2E1F] block mb-1">
+                    CTA Button Text:
+                  </label>
+                  <input
+                    type="text"
+                    value={adsSettings.popup_cta_text || ''}
+                    onChange={(e) => setAdsSettings({ ...adsSettings, popup_cta_text: e.target.value })}
+                    placeholder="🚀 Claim Offer"
+                    className="w-full bg-[#FAF7F2] border border-[#EBE3D8] rounded-xl px-3 py-1.5 text-xs text-[#26160F] focus:outline-none focus:border-[#5C3824]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-[#4A2E1F] block mb-1">
+                  Skip Countdown Timer (seconds):
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="30"
+                  value={adsSettings.popup_countdown ?? 3}
+                  onChange={(e) => setAdsSettings({ ...adsSettings, popup_countdown: parseInt(e.target.value) || 0 })}
+                  className="w-24 bg-[#FAF7F2] border border-[#EBE3D8] rounded-xl px-3 py-1.5 text-xs text-[#26160F] font-mono focus:outline-none focus:border-[#5C3824]"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: In-Page Banner Ads */}
+          <div className="p-4 rounded-3xl bg-white border border-[#EBE3D8] shadow-sm space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-[#F0E8DE]">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs">
+                  🖼️
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-[#26160F]">
+                    Page Banner Ads (Services / Inbox / Wallet)
+                  </h4>
+                  <p className="text-[10px] text-[#826A5C]">
+                    Displayed dynamically inside app pages.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setAdsSettings({ ...adsSettings, banner_enabled: !adsSettings.banner_enabled });
+                }}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                  adsSettings.banner_enabled
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-stone-200 text-stone-600'
+                }`}
+              >
+                {adsSettings.banner_enabled ? '🟢 ON' : '🔴 OFF'}
+              </button>
+            </div>
+
+            <div className="space-y-2.5">
+              <div>
+                <label className="text-[11px] font-bold text-[#4A2E1F] block mb-1">
+                  Adsterra 320x50 Banner Unit Key:
+                </label>
+                <input
+                  type="text"
+                  value={adsSettings.adsterra_banner_key_320x50 || ''}
+                  onChange={(e) => setAdsSettings({ ...adsSettings, adsterra_banner_key_320x50: e.target.value.trim() })}
+                  placeholder="e.g. 7f8b92c4a1e5..."
+                  className="w-full bg-[#FAF7F2] border border-[#EBE3D8] rounded-xl px-3 py-1.5 text-xs text-[#26160F] font-mono focus:outline-none focus:border-[#5C3824]"
+                />
+                <span className="text-[10px] text-[#826A5C] mt-1 block">
+                  💡 If left empty, a clickable Smartlink / Partner banner card will be displayed instead.
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-bold text-[#4A2E1F] block mb-1">
+                    Banner Title:
+                  </label>
+                  <input
+                    type="text"
+                    value={adsSettings.banner_title || ''}
+                    onChange={(e) => setAdsSettings({ ...adsSettings, banner_title: e.target.value })}
+                    placeholder="e.g. 💎 VIP Community"
+                    className="w-full bg-[#FAF7F2] border border-[#EBE3D8] rounded-xl px-3 py-1.5 text-xs text-[#26160F] focus:outline-none focus:border-[#5C3824]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-[#4A2E1F] block mb-1">
+                    Button Text:
+                  </label>
+                  <input
+                    type="text"
+                    value={adsSettings.banner_cta_text || ''}
+                    onChange={(e) => setAdsSettings({ ...adsSettings, banner_cta_text: e.target.value })}
+                    placeholder="Join VIP"
+                    className="w-full bg-[#FAF7F2] border border-[#EBE3D8] rounded-xl px-3 py-1.5 text-xs text-[#26160F] focus:outline-none focus:border-[#5C3824]"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 4: Client Bot Messages Ad */}
+          <div className="p-4 rounded-3xl bg-white border border-[#EBE3D8] shadow-sm space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-[#F0E8DE]">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">
+                  🤖
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-[#26160F]">
+                    Client Telegram Bot Message Ads
+                  </h4>
+                  <p className="text-[10px] text-[#826A5C]">
+                    Appends sponsor text & inline button to /start and live OTP alerts.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setAdsSettings({ ...adsSettings, bot_ad_enabled: !adsSettings.bot_ad_enabled });
+                }}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                  adsSettings.bot_ad_enabled
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-stone-200 text-stone-600'
+                }`}
+              >
+                {adsSettings.bot_ad_enabled ? '🟢 ON' : '🔴 OFF'}
+              </button>
+            </div>
+
+            <div className="space-y-2.5">
+              <div>
+                <label className="text-[11px] font-bold text-[#4A2E1F] block mb-1">
+                  Bot Sponsor Message Text:
+                </label>
+                <input
+                  type="text"
+                  value={adsSettings.bot_ad_text || ''}
+                  onChange={(e) => setAdsSettings({ ...adsSettings, bot_ad_text: e.target.value })}
+                  placeholder="e.g. Join @OTP_LIFE_bot for live bonuses!"
+                  className="w-full bg-[#FAF7F2] border border-[#EBE3D8] rounded-xl px-3 py-1.5 text-xs text-[#26160F] focus:outline-none focus:border-[#5C3824]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-bold text-[#4A2E1F] block mb-1">
+                    Button Text:
+                  </label>
+                  <input
+                    type="text"
+                    value={adsSettings.bot_ad_button_text || ''}
+                    onChange={(e) => setAdsSettings({ ...adsSettings, bot_ad_button_text: e.target.value })}
+                    placeholder="📢 Official Channel"
+                    className="w-full bg-[#FAF7F2] border border-[#EBE3D8] rounded-xl px-3 py-1.5 text-xs text-[#26160F] focus:outline-none focus:border-[#5C3824]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-[#4A2E1F] block mb-1">
+                    Button URL (Direct Link / Channel):
+                  </label>
+                  <input
+                    type="url"
+                    value={adsSettings.bot_ad_button_url || ''}
+                    onChange={(e) => setAdsSettings({ ...adsSettings, bot_ad_button_url: e.target.value })}
+                    placeholder="https://t.me/..."
+                    className="w-full bg-[#FAF7F2] border border-[#EBE3D8] rounded-xl px-3 py-1.5 text-xs text-[#26160F] font-mono focus:outline-none focus:border-[#5C3824]"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Save Button */}
+          <button
+            onClick={handleSaveAds}
+            disabled={isSavingAds}
+            className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#2D6A4F] to-[#1B4332] hover:brightness-110 active:scale-98 text-white font-extrabold text-sm shadow-xl shadow-[#2D6A4F]/20 transition-all flex items-center justify-center gap-2 border border-emerald-400/30"
+          >
+            <span>{isSavingAds ? 'Saving Changes...' : '💾 Save All Adsterra & Ad Settings'}</span>
+          </button>
         </div>
       )}
 
