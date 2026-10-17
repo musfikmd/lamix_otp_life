@@ -271,7 +271,7 @@ export const AdminDashboardView = () => {
         body: JSON.stringify({
           serviceId,
           rangeId: selectedRangeId,
-          rangeName: rangeObj?.range_name || 'Lamix Range',
+          rangeName: rangeObj?.range_name || 'Global Range',
           displayName: linkCountryName.trim() || rangeObj?.country || 'Global',
           rateBdt: parseFloat(linkRateBdt) || 0.80,
           prefix: rangeObj?.prefix || '213',
@@ -325,7 +325,7 @@ export const AdminDashboardView = () => {
       const data = await res.json();
       setIsSyncing(false);
       if (data.success) {
-        showToast(`Synced ${data.synced || 0} numbers from Lamix!`);
+        showToast(`Synced ${data.synced || 0} numbers successfully!`);
         fetchOverview();
         fetchAvailableRanges();
       } else {
@@ -373,7 +373,7 @@ export const AdminDashboardView = () => {
           className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 active:scale-95 text-xs font-bold text-white flex items-center gap-1.5 border border-white/25 transition-all disabled:opacity-50"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-          <span>{isSyncing ? 'Syncing...' : 'Sync Lamix'}</span>
+          <span>{isSyncing ? 'Syncing...' : 'Sync Pool'}</span>
         </button>
       </div>
 
@@ -1266,7 +1266,7 @@ export const AdminDashboardView = () => {
                 {/* Range Selector */}
                 <div>
                   <label className="text-[11px] font-bold text-[#4A2E1F] block mb-1">
-                    Lamix Number Pool Range:
+                    Available Number Pool Range:
                   </label>
                   <select
                     value={selectedRangeId}
@@ -1383,7 +1383,7 @@ export const AdminDashboardView = () => {
 
               <div>
                 <label className="text-xs font-bold text-[#4A2E1F] block mb-1">
-                  Lamix Number Pool Range:
+                  Available Number Pool Range:
                 </label>
                 <select
                   value={selectedRangeId}

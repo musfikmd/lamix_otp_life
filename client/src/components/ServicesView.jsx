@@ -54,7 +54,7 @@ export const ServicesView = ({ onSelectService, ads = null }) => {
                   LIVE ENGINE
                 </span>
                 <span className="text-xs font-bold text-white">
-                  Lamix Live Server Active
+                  OTP LIFE Live Server Active
                 </span>
               </div>
               <p className="text-[11px] text-[#F3E8E1] mt-0.5">
