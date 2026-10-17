@@ -1,5 +1,5 @@
 const axios = require('axios');
-const token = 'gjVT2xmSGqHpVfriWp4N9TgieGT6deSARjPOL42CA8s';
+const token = process.env.LAMIX_API_TOKEN || 'V5sNe9n8mmeXIatTnOb4NRrtK19h2Htys2PthS4BXKE';
 const baseURL = 'https://panel.lamix.org';
 
 async function testAll() {
