@@ -192,7 +192,7 @@ export const ClaimServiceModal = ({ service, onClose, onClaimNumber }) => {
             )}
           </button>
           <p className="text-[11px] text-center text-[#826A5C] mt-2">
-            🔒 Numbers are reserved for 20 minutes. Zero upfront fee!
+            🔒 Numbers are reserved for 24 hours (1 day). Zero upfront fee!
           </p>
         </div>
       </div>

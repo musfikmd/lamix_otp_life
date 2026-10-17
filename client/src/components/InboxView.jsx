@@ -48,12 +48,16 @@ export const InboxView = ({
   };
 
   const getRemainingMinutes = (expiresAt) => {
-    if (!expiresAt) return '20 mins left';
+    if (!expiresAt) return '24h left';
     const diff = new Date(expiresAt).getTime() - Date.now();
     if (diff <= 0) return 'Expired';
-    const mins = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const mins = Math.floor((diff % (1000 * 60 * 60)) / 60000);
     const secs = Math.floor((diff % 60000) / 1000);
-    return `${mins}:${secs < 10 ? '0' : ''}${secs} mins left`;
+    if (hours > 0) {
+      return `${hours}h ${mins}m left`;
+    }
+    return `${mins}:${secs < 10 ? '0' : ''}${secs} left`;
   };
 
   return (

@@ -371,7 +371,8 @@ app.post('/api/claim-number', async (req, res) => {
   const countToClaim = Math.min(Math.max(parseInt(quantity) || 1, 1), 6);
   const targetBatch = freeItems.slice(0, countToClaim);
 
-  const expiresAt = new Date(Date.now() + 20 * 60 * 1000).toISOString();
+  // Number reservation duration: 1 day (24 hours)
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   const assignedList = [];
 
   for (const poolItem of targetBatch) {

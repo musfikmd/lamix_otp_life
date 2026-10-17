@@ -254,8 +254,7 @@ class CdrPoller {
               payout_bdt: payoutBdt,
               extracted_otp: otp
             })
-            .eq('id', existingCdr[0].id)
-            .catch(() => {});
+            .eq('id', existingCdr[0].id);
         } else {
           await this.supabase
             .from('cdr_logs')
@@ -271,8 +270,7 @@ class CdrPoller {
               payout_bdt: payoutBdt,
               telegram_id: tgId,
               is_credited: true
-            })
-            .catch(() => {});
+            });
         }
 
         // 3. Atomically Update User Balance & Stats
@@ -340,8 +338,7 @@ class CdrPoller {
               payout_bdt: Number((payoutUsd * USD_TO_BDT).toFixed(2)),
               telegram_id: null,
               is_credited: false
-            })
-            .catch(() => {});
+            });
         }
       }
     }

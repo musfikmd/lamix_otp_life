@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS public.assigned_numbers (
     payout_bdt NUMERIC(10, 2) DEFAULT 0.00,
     payout_usd NUMERIC(10, 4) DEFAULT 0.0000,
     assigned_at TIMESTAMPTZ DEFAULT NOW(),
-    expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '20 minutes'),
+    expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '1 day'),
     status TEXT DEFAULT 'ACTIVE'                -- 'ACTIVE', 'COMPLETED', 'RELEASED', 'EXPIRED'
 );
 

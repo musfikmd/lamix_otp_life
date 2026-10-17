@@ -251,6 +251,49 @@ async function syncNumbersToDatabase(supabase, targetRangeId = null, onProgress 
     // 2. Load set of currently assigned numbers in DB
     const assignedSet = await fetchAllAssignedNumbersSet(supabase);
 
+    // 2.5. 🧹 PURGE OBSOLETE / DEAD RANGES (Ranges in DB no longer present in Lamix account)
+    if (!targetRangeId) {
+      const activeRangeIds = new Set(targetRanges.map((r) => r.id));
+      const { data: allDbPoolRows, error: allPoolErr } = await supabase
+        .from('number_pool')
+        .select('id, number, range_id, range_name, is_assigned');
+
+      if (!allPoolErr && allDbPoolRows && allDbPoolRows.length > 0) {
+        const deadRangeRows = allDbPoolRows.filter(
+          (r) => !r.range_id || !activeRangeIds.has(r.range_id)
+        );
+
+        if (deadRangeRows.length > 0) {
+          console.log(`⚠️ [Dead Ranges Audit] Found ${deadRangeRows.length} number(s) belonging to obsolete/removed ranges.`);
+
+          // Purge unassigned dead range numbers
+          const unassignedDeadIds = deadRangeRows.filter((r) => !r.is_assigned).map((r) => r.id);
+          for (let i = 0; i < unassignedDeadIds.length; i += 200) {
+            const chunk = unassignedDeadIds.slice(i, i + 200);
+            await supabase.from('number_pool').delete().in('id', chunk);
+          }
+
+          // Purge assigned dead range numbers & expire in assigned_numbers
+          const assignedDead = deadRangeRows.filter((r) => r.is_assigned);
+          if (assignedDead.length > 0) {
+            const assignedDeadIds = assignedDead.map((r) => r.id);
+            const assignedDeadNumbers = assignedDead.map((r) => r.number);
+            for (let i = 0; i < assignedDeadIds.length; i += 200) {
+              const chunk = assignedDeadIds.slice(i, i + 200);
+              await supabase.from('number_pool').delete().in('id', chunk);
+            }
+            for (let i = 0; i < assignedDeadNumbers.length; i += 200) {
+              const chunk = assignedDeadNumbers.slice(i, i + 200);
+              await supabase.from('assigned_numbers').update({ status: 'EXPIRED' }).in('number', chunk);
+            }
+          }
+
+          totalDeadPurged += deadRangeRows.length;
+          console.log(`🧹 [Dead Ranges Purged] Successfully purged ${deadRangeRows.length} dead number(s) from obsolete ranges.`);
+        }
+      }
+    }
+
     // 3. Process each range one by one
     for (const range of targetRanges) {
       console.log(`\n🌐 [Range Audit] Checking range: "${range.name}" (ID: ${range.id})`);

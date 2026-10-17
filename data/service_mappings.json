@@ -2,11 +2,11 @@
   {
     "id": "map_323887",
     "app_service_id": "shopee_6657",
-    "range_id": "a7cf6f83-75c4-4541-a695-13a7308885ce",
-    "range_name": "Kenya Orange 25477512xxxx",
-    "display_name": "Kenya",
-    "country": "Kenya",
-    "rate_bdt": 0.8,
-    "prefix": "25477512"
+    "range_id": "9e0a18d8-4b2e-42d6-8ec6-7e060c23e099",
+    "range_name": "Tanzania LX 06Apr",
+    "display_name": "Tanzania",
+    "country": "Tanzania",
+    "rate_bdt": 2.0,
+    "prefix": "255"
   }
 ]
