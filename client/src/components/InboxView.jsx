@@ -5,7 +5,8 @@ import {
   Check, 
   Clock, 
   Trash2, 
-  MessageSquare
+  MessageSquare,
+  Phone
 } from 'lucide-react';
 
 export const InboxView = ({ 
@@ -16,6 +17,9 @@ export const InboxView = ({
   const { triggerHaptic } = useTelegram();
   const [copiedKey, setCopiedKey] = useState(null);
   const [stripPrefix, setStripPrefix] = useState(false);
+  const [activeTab, setActiveTab] = useState(
+    activeNumbers.length > 0 ? 'numbers' : (smsMessages.length > 0 ? 'otps' : 'numbers')
+  );
 
   // Robust Copy helper with WebView fallback
   const handleCopy = (text, key) => {
@@ -61,18 +65,62 @@ export const InboxView = ({
   };
 
   return (
-    <div className="pb-24 pt-2 px-4 space-y-5">
+    <div className="pb-24 pt-2 px-4 space-y-4">
+      {/* Side-by-side Segmented Tab Switcher */}
+      <div className="bg-[#FAF7F2] p-1.5 rounded-2xl border border-[#EBE3D8] flex items-center gap-1.5 shadow-sm">
+        <button
+          onClick={() => {
+            triggerHaptic('selection');
+            setActiveTab('numbers');
+          }}
+          className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+            activeTab === 'numbers'
+              ? 'bg-gradient-to-r from-[#4A2E1F] to-[#5C3824] text-white shadow-md shadow-[#5C3824]/20 scale-[1.01]'
+              : 'text-[#826A5C] hover:text-[#4A2E1F] hover:bg-white/60'
+          }`}
+        >
+          <Phone className="w-3.5 h-3.5" />
+          <span>Active Numbers</span>
+          <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+            activeTab === 'numbers' ? 'bg-white/20 text-white' : 'bg-[#5C3824]/10 text-[#5C3824]'
+          }`}>
+            {activeNumbers.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => {
+            triggerHaptic('selection');
+            setActiveTab('otps');
+          }}
+          className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+            activeTab === 'otps'
+              ? 'bg-gradient-to-r from-[#4A2E1F] to-[#5C3824] text-white shadow-md shadow-[#5C3824]/20 scale-[1.01]'
+              : 'text-[#826A5C] hover:text-[#4A2E1F] hover:bg-white/60'
+          }`}
+        >
+          <MessageSquare className="w-3.5 h-3.5" />
+          <span>Received OTPs</span>
+          <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+            activeTab === 'otps' ? 'bg-white/20 text-white' : 'bg-[#2D6A4F]/10 text-[#2D6A4F]'
+          }`}>
+            {smsMessages.length}
+          </span>
+        </button>
+      </div>
+
       {/* Active Numbers Section */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <h2 className="text-sm font-bold text-[#4A2E1F] uppercase tracking-wider">
-              Active Numbers
-            </h2>
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-[#5C3824]/10 text-[#5C3824]">
-              {activeNumbers.length}
-            </span>
-          </div>
+      {activeTab === 'numbers' && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-bold text-[#4A2E1F] uppercase tracking-wider">
+                Claimed Numbers
+              </h2>
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-[#5C3824]/10 text-[#5C3824]">
+                {activeNumbers.length}
+              </span>
+            </div>
 
           {/* Prefix toggle */}
           <button
@@ -184,17 +232,19 @@ export const InboxView = ({
           </div>
         )}
       </div>
+      )}
 
       {/* Live SMS & OTP Inbox */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-[#5C3824]" />
-            <h2 className="text-sm font-bold text-[#4A2E1F] uppercase tracking-wider">
-              Incoming OTP Inbox ({smsMessages.length})
-            </h2>
+      {activeTab === 'otps' && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-[#5C3824]" />
+              <h2 className="text-sm font-bold text-[#4A2E1F] uppercase tracking-wider">
+                Incoming OTP Inbox ({smsMessages.length})
+              </h2>
+            </div>
           </div>
-        </div>
 
         {smsMessages.length === 0 ? (
           <div className="p-8 rounded-3xl bg-white border border-dashed border-[#EBE3D8] text-center">
@@ -268,6 +318,7 @@ export const InboxView = ({
           </div>
         )}
       </div>
+      )}
     </div>
   );
 };

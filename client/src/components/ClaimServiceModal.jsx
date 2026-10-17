@@ -106,11 +106,9 @@ export const ClaimServiceModal = ({ service, onClose, onClaimNumber }) => {
                           </span>
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[10px] text-[#826A5C]">
-                            Server: {range.provider}
-                          </span>
-                          <span className="text-[10px] text-[#2D6A4F] font-semibold">
-                            ● {range.stock} In Stock
+                          <span className="text-[10px] text-[#2D6A4F] font-semibold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                            {range.stock} In Stock
                           </span>
                         </div>
                       </div>
