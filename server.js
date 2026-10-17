@@ -204,23 +204,31 @@ app.get('/api/user-data', async (req, res) => {
   const seenMsgKeys = new Set();
   const combinedSms = [];
 
+  const cleanKey = (num, text) => {
+    const n = String(num || '').replace(/\D/g, '');
+    const t = String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    return `${n}:::${t}`;
+  };
+
   for (const c of (cdrRes.data || [])) {
-    const key = `${c.number}_${c.content}`;
-    seenMsgKeys.add(key);
-    combinedSms.push({
-      id: `cdr_${c.id}`,
-      number: c.number,
-      serviceName: c.range_name || c.cli || 'SMS',
-      cli: c.cli,
-      code: c.extracted_otp,
-      text: c.content,
-      earned: Number(c.payout_bdt) || 0,
-      receivedAt: c.cdr_time || c.created_at
-    });
+    const key = cleanKey(c.number, c.content);
+    if (!seenMsgKeys.has(key)) {
+      seenMsgKeys.add(key);
+      combinedSms.push({
+        id: `cdr_${c.id}`,
+        number: c.number,
+        serviceName: c.range_name || c.cli || 'SMS',
+        cli: c.cli,
+        code: c.extracted_otp,
+        text: c.content,
+        earned: Number(c.payout_bdt) || 0,
+        receivedAt: c.cdr_time || c.created_at
+      });
+    }
   }
 
   for (const t of (txnRes.data || [])) {
-    const key = `${t.number}_${t.sms_text}`;
+    const key = cleanKey(t.number, t.sms_text);
     if (!seenMsgKeys.has(key)) {
       seenMsgKeys.add(key);
       combinedSms.push({
