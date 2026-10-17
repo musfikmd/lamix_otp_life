@@ -4,6 +4,14 @@ const axios = require('axios');
 const settingsManager = require('./settingsManager');
 const { extractOtp } = require('./lamixApi');
 
+function escapeHtml(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 class ClientBot {
   constructor(token, supabase, webAppUrl, notifyAdminFn, appServiceManager) {
     this.token = token;
@@ -34,7 +42,20 @@ class ClientBot {
     if (replyMarkup && typeof replyMarkup === 'object') {
       payload.reply_markup = replyMarkup;
     }
-    return this.sendRequest('sendMessage', payload);
+    const res = await this.sendRequest('sendMessage', payload);
+    if (!res) {
+      // Fallback: If Telegram HTML parsing failed, strip HTML tags and send as plain text
+      const plainText = text.replace(/<[^>]*>/g, '');
+      const plainPayload = {
+        chat_id: chatId,
+        text: plainText
+      };
+      if (replyMarkup && typeof replyMarkup === 'object') {
+        plainPayload.reply_markup = replyMarkup;
+      }
+      return this.sendRequest('sendMessage', plainPayload);
+    }
+    return res;
   }
 
   async editMessageText(chatId, messageId, text, replyMarkup = null) {
@@ -47,7 +68,20 @@ class ClientBot {
     if (replyMarkup && typeof replyMarkup === 'object') {
       payload.reply_markup = replyMarkup;
     }
-    return this.sendRequest('editMessageText', payload);
+    const res = await this.sendRequest('editMessageText', payload);
+    if (!res) {
+      const plainText = text.replace(/<[^>]*>/g, '');
+      const plainPayload = {
+        chat_id: chatId,
+        message_id: messageId,
+        text: plainText
+      };
+      if (replyMarkup && typeof replyMarkup === 'object') {
+        plainPayload.reply_markup = replyMarkup;
+      }
+      return this.sendRequest('editMessageText', plainPayload);
+    }
+    return res;
   }
 
   async answerCallback(callbackQueryId, text = null, showAlert = false) {
@@ -175,15 +209,20 @@ class ClientBot {
   async sendOtpAlert(tgId, number, cli, otp, payoutBdt, content, serviceName = null) {
     const cleanNum = `+${String(number).replace(/^\+/, '')}`;
     const displayOtp = otp && otp !== 'SMS Received' ? otp : null;
+    const safeCli = escapeHtml(cli || 'Unknown');
+    const safeContent = escapeHtml(content || 'No content');
+    const safeServiceName = serviceName ? escapeHtml(serviceName) : null;
+    const safeOtp = displayOtp ? escapeHtml(displayOtp) : null;
+
     const msg =
       `📨 <b>New SMS Received!</b>\n` +
       `━━━━━━━━━━━━━━━━━━━\n` +
       `📲 <b>Number:</b> <code>${cleanNum}</code>\n` +
-      `📤 <b>From:</b> <b>${cli || 'Unknown'}</b>\n` +
-      (serviceName ? `📱 <b>Service:</b> ${serviceName}\n` : '') +
-      `💬 <b>Message:</b>\n<code>${content || 'No content'}</code>\n` +
+      `📤 <b>From:</b> <b>${safeCli}</b>\n` +
+      (safeServiceName ? `📱 <b>Service:</b> ${safeServiceName}\n` : '') +
+      `💬 <b>Message:</b>\n<code>${safeContent}</code>\n` +
       `━━━━━━━━━━━━━━━━━━━\n` +
-      (displayOtp ? `🔑 <b>OTP Code:</b> <code>${displayOtp}</code>\n` : '') +
+      (safeOtp ? `🔑 <b>OTP Code:</b> <code>${safeOtp}</code>\n` : '') +
       `💵 <b>Earned:</b> <b>+৳${Number(payoutBdt).toFixed(2)} BDT</b>`;
 
     const buttons = {

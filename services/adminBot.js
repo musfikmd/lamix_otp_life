@@ -55,7 +55,19 @@ class AdminBot {
     if (replyMarkup && typeof replyMarkup === 'object') {
       payload.reply_markup = replyMarkup;
     }
-    return this.sendRequest('sendMessage', payload);
+    const res = await this.sendRequest('sendMessage', payload);
+    if (!res) {
+      const plainText = text.replace(/<[^>]*>/g, '');
+      const plainPayload = {
+        chat_id: chatId,
+        text: plainText
+      };
+      if (replyMarkup && typeof replyMarkup === 'object') {
+        plainPayload.reply_markup = replyMarkup;
+      }
+      return this.sendRequest('sendMessage', plainPayload);
+    }
+    return res;
   }
 
   async editMessageText(chatId, messageId, text, replyMarkup = null) {
@@ -68,7 +80,20 @@ class AdminBot {
     if (replyMarkup && typeof replyMarkup === 'object') {
       payload.reply_markup = replyMarkup;
     }
-    return this.sendRequest('editMessageText', payload);
+    const res = await this.sendRequest('editMessageText', payload);
+    if (!res) {
+      const plainText = text.replace(/<[^>]*>/g, '');
+      const plainPayload = {
+        chat_id: chatId,
+        message_id: messageId,
+        text: plainText
+      };
+      if (replyMarkup && typeof replyMarkup === 'object') {
+        plainPayload.reply_markup = replyMarkup;
+      }
+      return this.sendRequest('editMessageText', plainPayload);
+    }
+    return res;
   }
 
   async answerCallback(callbackQueryId, text = null, showAlert = false) {
