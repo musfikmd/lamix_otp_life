@@ -14,7 +14,13 @@ import { CheckCircle2, AlertCircle } from 'lucide-react';
 
 function MainApp() {
   const { user, setUser, triggerHaptic } = useTelegram();
-  const [isAdminMode, setIsAdminMode] = useState(false);
+  const [isAdminMode, setIsAdminMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('admin') === 'true';
+    }
+    return false;
+  });
   const [activeTab, setActiveTab] = useState('services');
   const [selectedService, setSelectedService] = useState(null);
   const [activeNumbers, setActiveNumbers] = useState([]);
@@ -35,8 +41,13 @@ function MainApp() {
       .catch(() => {});
   }, []);
 
-  // Automatic View-Based CPM Script Injector (Social Bar / Popunder)
+  // Automatic View-Based CPM Script Injector (Social Bar / Popunder) - EXCLUDED for Admin
   useEffect(() => {
+    if (isAdminMode) {
+      const existing = document.getElementById('adsterra-cpm-view-script');
+      if (existing) existing.remove();
+      return;
+    }
     if (!ads || ads.cpm_views_enabled === false) return;
     const raw = (ads.cpm_script_src || ads.cpm_script_code || '').trim();
     if (!raw) return;
@@ -55,9 +66,9 @@ function MainApp() {
       script.async = true;
       document.head.appendChild(script);
     }
-  }, [ads]);
+  }, [ads, isAdminMode]);
 
-  // Check if opened with ?admin=true
+  // Check if opened with ?admin=true dynamically
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -195,6 +206,7 @@ function MainApp() {
                 activeNumbers={activeNumbers}
                 smsMessages={smsMessages}
                 onReleaseNumber={handleReleaseNumber}
+                onGoToServices={() => setActiveTab('services')}
                 ads={ads}
               />
             )}

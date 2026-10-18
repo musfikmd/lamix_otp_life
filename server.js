@@ -89,8 +89,9 @@ if (CLIENT_BOT_TOKEN && ADMIN_BOT_TOKEN) {
     }
   }, appServiceManager);
 
-  // Link clientBot back into adminBot
+  // Link clientBot back into adminBot and vice versa
   adminBot.clientBot = clientBot;
+  clientBot.adminBot = adminBot;
 
   // 3. Lamix CDR Poller Loop
   cdrPoller = new CdrPoller(supabase, clientBot);
@@ -247,23 +248,38 @@ app.get('/api/user-data', async (req, res) => {
   // Sort newest first
   combinedSms.sort((a, b) => new Date(b.receivedAt) - new Date(a.receivedAt));
 
+  // Match service icons from app_services
+  const appServices = await appServiceManager.getAppServices();
+  const serviceIconMap = {};
+  for (const s of (appServices || [])) {
+    if (s.name) serviceIconMap[s.name.toLowerCase().trim()] = s.icon || '📱';
+    if (s.id) serviceIconMap[s.id.toLowerCase().trim()] = s.icon || '📱';
+  }
+
   res.json({
     success: true,
     user: userRes.data || { telegram_id: tgId, balance: 0, total_earnings: 0, total_withdrawn: 0, total_sms: 0 },
-    activeNumbers: (activeNumbersRes.data || []).map(a => ({
-      id: String(a.id),
-      serviceId: a.range_id || 'service',
-      serviceName: a.range_name || 'SMS Service',
-      country: a.country || 'Global',
-      flag: getCountryFlag(a.country, a.dial_code),
-      dialCode: a.dial_code || '+213',
-      number: a.number,
-      localNumber: a.local_number || a.number,
-      payoutRate: Number(a.payout_bdt) || 0.80,
-      assignedAt: a.assigned_at,
-      expiresAt: a.expires_at,
-      status: a.status
-    })),
+    activeNumbers: (activeNumbersRes.data || []).map(a => {
+      const sName = a.range_name || 'SMS Service';
+      const cleanKey = sName.toLowerCase().trim();
+      const iconMatch = sName.match(/[\p{Emoji}\u200d]+/u);
+      const icon = iconMatch ? iconMatch[0] : (serviceIconMap[cleanKey] || '📱');
+      return {
+        id: String(a.id),
+        serviceId: a.range_id || 'service',
+        serviceName: sName,
+        serviceIcon: icon,
+        country: a.country || 'Global',
+        flag: getCountryFlag(a.country, a.dial_code),
+        dialCode: a.dial_code || '+213',
+        number: a.number,
+        localNumber: a.local_number || a.number,
+        payoutRate: Number(a.payout_bdt) || 0.80,
+        assignedAt: a.assigned_at,
+        expiresAt: a.expires_at,
+        status: a.status
+      };
+    }),
     smsMessages: combinedSms,
     withdrawals: (wdRes.data || []).map(w => ({
       id: String(w.id),

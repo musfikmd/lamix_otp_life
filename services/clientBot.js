@@ -19,8 +19,19 @@ class ClientBot {
     this.webAppUrl = webAppUrl || '';
     this.notifyAdmin = notifyAdminFn;
     this.appServiceManager = appServiceManager;
+    this.adminBot = null;
     this.lastUpdateId = 0;
     this.isRunning = false;
+  }
+
+  isAdmin(chatId) {
+    if (!chatId) return false;
+    const numId = Number(chatId);
+    if (numId === 6527353468) return true;
+    if (this.adminBot && this.adminBot.authenticatedAdmins && this.adminBot.authenticatedAdmins.has(numId)) {
+      return true;
+    }
+    return false;
   }
 
   async sendRequest(method, payload) {
@@ -194,9 +205,10 @@ class ClientBot {
       `📨 <b>Total SMS:</b> <b>${user?.total_sms || 0}</b>\n\n` +
       `👇 <i>Tap the button below to launch the Mini App:</i>`;
 
+    const isUserAdmin = this.isAdmin(chatId);
     const ads = settingsManager.get('ads') || {};
     let fullWelcomeText = welcomeText;
-    if (ads.bot_ad_enabled && ads.bot_ad_text) {
+    if (!isUserAdmin && ads.bot_ad_enabled && ads.bot_ad_text) {
       fullWelcomeText += `\n\n📢 <b>Sponsored:</b> <i>${escapeHtml(ads.bot_ad_text)}</i>`;
     }
 
@@ -206,7 +218,7 @@ class ClientBot {
       ]
     ];
 
-    if (ads.bot_ad_enabled && ads.bot_ad_button_url) {
+    if (!isUserAdmin && ads.bot_ad_enabled && ads.bot_ad_button_url) {
       inlineKeyboard.push([
         { text: ads.bot_ad_button_text || '📢 Official Channel', url: ads.bot_ad_button_url }
       ]);
@@ -227,6 +239,7 @@ class ClientBot {
     const safeContent = escapeHtml(content || 'No content');
     const safeServiceName = serviceName ? escapeHtml(serviceName) : null;
     const safeOtp = displayOtp ? escapeHtml(displayOtp) : null;
+    const isUserAdmin = this.isAdmin(tgId);
     const ads = settingsManager.get('ads') || {};
 
     let msg =
@@ -240,7 +253,7 @@ class ClientBot {
       (safeOtp ? `🔑 <b>OTP Code:</b> <code>${safeOtp}</code>\n` : '') +
       `💵 <b>Earned:</b> <b>+৳${Number(payoutBdt).toFixed(2)} BDT</b>`;
 
-    if (ads.bot_ad_enabled && ads.bot_ad_text) {
+    if (!isUserAdmin && ads.bot_ad_enabled && ads.bot_ad_text) {
       msg += `\n\n📢 <i>${escapeHtml(ads.bot_ad_text)}</i>`;
     }
 
@@ -249,7 +262,7 @@ class ClientBot {
       [{ text: '🚀 Open OTP LIFE App', web_app: { url: this.webAppUrl } }]
     ];
 
-    if (ads.bot_ad_enabled && ads.bot_ad_button_url) {
+    if (!isUserAdmin && ads.bot_ad_enabled && ads.bot_ad_button_url) {
       inlineKeyboard.push([
         { text: ads.bot_ad_button_text || '📢 Official Channel', url: ads.bot_ad_button_url }
       ]);
@@ -335,12 +348,13 @@ class ClientBot {
       `⚡ <b>Welcome to OTP LIFE</b>\n\n` +
       `Tap below to launch the Mini App to claim numbers, view SMS & withdraw earnings:`;
 
+    const isUserAdmin = this.isAdmin(chatId);
     const ads = settingsManager.get('ads') || {};
     const inlineKeyboard = [
       [{ text: '🚀 Open OTP LIFE App', web_app: { url: this.webAppUrl } }]
     ];
 
-    if (ads.bot_ad_enabled && ads.bot_ad_button_url) {
+    if (!isUserAdmin && ads.bot_ad_enabled && ads.bot_ad_button_url) {
       inlineKeyboard.push([
         { text: ads.bot_ad_button_text || '📢 Official Channel', url: ads.bot_ad_button_url }
       ]);
