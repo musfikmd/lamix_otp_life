@@ -190,11 +190,11 @@ app.get('/api/user-data', async (req, res) => {
   const nowIso = new Date().toISOString();
   const [userRes, activeNumbersRes, cdrRes, txnRes, wdRes, refRes] = await Promise.all([
     supabase.from('users').select('*').eq('telegram_id', tgId).maybeSingle(),
-    supabase.from('assigned_numbers').select('*').eq('telegram_id', tgId).eq('status', 'ACTIVE').gt('expires_at', nowIso).order('assigned_at', { ascending: false }),
+    supabase.from('assigned_numbers').select('*').eq('telegram_id', tgId).eq('status', 'ACTIVE').gt('expires_at', nowIso).order('assigned_at', { ascending: false }).limit(100000),
     supabase.from('cdr_logs').select('*').eq('telegram_id', tgId).order('cdr_time', { ascending: false }).limit(50),
     supabase.from('transactions').select('*').eq('telegram_id', tgId).eq('type', 'EARNING').order('created_at', { ascending: false }).limit(50),
     supabase.from('withdrawals').select('*').eq('telegram_id', tgId).order('requested_at', { ascending: false }).limit(50),
-    supabase.from('referrals').select('*').eq('referrer_id', tgId)
+    supabase.from('referrals').select('*').eq('referrer_id', tgId).limit(100000)
   ]);
 
   const referrals = refRes.data || [];
@@ -302,7 +302,7 @@ app.get('/api/services', async (req, res) => {
   const dbServices = await appServiceManager.getAppServices();
 
   const { data: poolNumbers } = supabase
-    ? await supabase.from('number_pool').select('range_id, range_name, prefix, country, is_assigned')
+    ? await supabase.from('number_pool').select('range_id, range_name, prefix, country, is_assigned').limit(100000)
     : { data: [] };
 
   const poolCounts = {};
@@ -361,7 +361,8 @@ app.post('/api/claim-number', async (req, res) => {
     .from('assigned_numbers')
     .select('number')
     .eq('status', 'ACTIVE')
-    .gt('expires_at', new Date().toISOString());
+    .gt('expires_at', new Date().toISOString())
+    .limit(100000);
 
   const activeNumSet = new Set((activeAssigned || []).map(a => String(a.number).replace(/\D/g, '')));
 
@@ -555,10 +556,10 @@ app.get('/api/admin/overview', async (req, res) => {
   }
 
   const [wdRes, poolRes, poolNumbersRes, srvRes, cdrRes] = await Promise.all([
-    supabase.from('withdrawals').select('*').eq('status', 'PENDING').order('requested_at', { ascending: false }),
+    supabase.from('withdrawals').select('*').eq('status', 'PENDING').order('requested_at', { ascending: false }).limit(100000),
     supabase.from('number_pool').select('*', { count: 'exact', head: true }),
-    supabase.from('number_pool').select('range_id, prefix, is_assigned'),
-    supabase.from('app_services').select('*').order('display_order', { ascending: true }),
+    supabase.from('number_pool').select('range_id, prefix, is_assigned').limit(100000),
+    supabase.from('app_services').select('*').order('display_order', { ascending: true }).limit(100000),
     supabase.from('cdr_logs').select('*', { count: 'exact', head: true })
   ]);
 

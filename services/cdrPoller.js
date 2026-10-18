@@ -69,7 +69,8 @@ class CdrPoller {
         .from('assigned_numbers')
         .select('*')
         .eq('status', 'ACTIVE')
-        .gt('expires_at', nowIso);
+        .gt('expires_at', nowIso)
+        .limit(100000);
 
       if (!error && data) {
         this.assignedCache.clear();
@@ -106,7 +107,7 @@ class CdrPoller {
       }
     }
 
-    // 3. Fallback direct DB query in case assignment just occurred
+    // 3. Fallback direct DB query in case assignment just occurred (up to 1 lac limit)
     try {
       const nowIso = new Date().toISOString();
       const { data: dbRows } = await this.supabase
@@ -114,7 +115,8 @@ class CdrPoller {
         .select('*')
         .eq('status', 'ACTIVE')
         .gt('expires_at', nowIso)
-        .order('assigned_at', { ascending: false });
+        .order('assigned_at', { ascending: false })
+        .limit(100000);
 
       if (dbRows && dbRows.length > 0) {
         for (const row of dbRows) {
@@ -143,7 +145,8 @@ class CdrPoller {
         .from('assigned_numbers')
         .select('id, number')
         .eq('status', 'ACTIVE')
-        .lt('expires_at', nowIso);
+        .lt('expires_at', nowIso)
+        .limit(100000);
 
       if (error || !expired || expired.length === 0) return;
 

@@ -190,7 +190,8 @@ async function fetchAllAssignedNumbersSet(supabase) {
       .from('assigned_numbers')
       .select('number')
       .eq('status', 'ACTIVE')
-      .gt('expires_at', new Date().toISOString());
+      .gt('expires_at', new Date().toISOString())
+      .limit(100000);
 
     if (data) {
       for (const row of data) {
@@ -248,7 +249,7 @@ async function syncNumbersToDatabase(supabase, targetRangeId = null, onProgress 
 
     console.log(`📋 [Lamix Sync] Processing ${targetRanges.length} active range(s)...`);
 
-    // 2. Load set of currently assigned numbers in DB
+    // 2. Load set of currently assigned numbers in DB (up to 1 lac)
     const assignedSet = await fetchAllAssignedNumbersSet(supabase);
 
     // 2.5. 🧹 PURGE OBSOLETE / DEAD RANGES (Ranges in DB no longer present in Lamix account)
@@ -256,7 +257,8 @@ async function syncNumbersToDatabase(supabase, targetRangeId = null, onProgress 
       const activeRangeIds = new Set(targetRanges.map((r) => r.id));
       const { data: allDbPoolRows, error: allPoolErr } = await supabase
         .from('number_pool')
-        .select('id, number, range_id, range_name, is_assigned');
+        .select('id, number, range_id, range_name, is_assigned')
+        .limit(100000);
 
       if (!allPoolErr && allDbPoolRows && allDbPoolRows.length > 0) {
         const deadRangeRows = allDbPoolRows.filter(

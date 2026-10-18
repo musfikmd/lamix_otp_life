@@ -47,7 +47,8 @@ class AppServiceManager {
         const { data, error } = await this.supabase
           .from('app_services')
           .select('*')
-          .order('display_order', { ascending: true });
+          .order('display_order', { ascending: true })
+          .limit(100000);
 
         if (!error && Array.isArray(data)) {
           // Keep local JSON in sync
@@ -203,7 +204,8 @@ class AppServiceManager {
     try {
       const { data: poolNumbers } = await this.supabase
         .from('number_pool')
-        .select('range_id, range_name, prefix, country, payout_bdt, is_assigned');
+        .select('range_id, range_name, prefix, country, payout_bdt, is_assigned')
+        .limit(100000);
 
       if (!poolNumbers) return [];
 

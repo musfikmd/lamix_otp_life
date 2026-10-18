@@ -157,13 +157,13 @@ class AdminBot {
       pendingWdRes,
       poolNumbersRes
     ] = await Promise.all([
-      this.supabase.from('users').select('balance, total_earnings, total_withdrawn'),
+      this.supabase.from('users').select('balance, total_earnings, total_withdrawn').limit(100000),
       this.supabase.from('assigned_numbers').select('*', { count: 'exact', head: true }).eq('status', 'ACTIVE'),
       this.supabase.from('withdrawals').select('*', { count: 'exact', head: true }).eq('status', 'PENDING'),
       this.supabase.from('cdr_logs').select('*', { count: 'exact', head: true }),
-      this.supabase.from('withdrawals').select('amount').eq('status', 'APPROVED'),
-      this.supabase.from('withdrawals').select('amount').eq('status', 'PENDING'),
-      this.supabase.from('number_pool').select('is_assigned')
+      this.supabase.from('withdrawals').select('amount').eq('status', 'APPROVED').limit(100000),
+      this.supabase.from('withdrawals').select('amount').eq('status', 'PENDING').limit(100000),
+      this.supabase.from('number_pool').select('is_assigned').limit(100000)
     ]);
 
     const users = usersRes.data || [];
@@ -299,7 +299,7 @@ class AdminBot {
       return this.sendMessage(chatId, '❌ Broadcast failed: Client bot instance unavailable.');
     }
 
-    const { data: users } = await this.supabase.from('users').select('telegram_id');
+    const { data: users } = await this.supabase.from('users').select('telegram_id').limit(100000);
     if (!users || users.length === 0) {
       return this.sendMessage(chatId, '⚠️ No users found to broadcast.');
     }
@@ -492,7 +492,8 @@ class AdminBot {
 
     const { data: refStats } = await this.supabase
       .from('referrals')
-      .select('referrer_id');
+      .select('referrer_id')
+      .limit(100000);
 
     const totalReferrals = refStats ? refStats.length : 0;
 
