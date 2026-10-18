@@ -106,7 +106,10 @@ function MainApp() {
 
   useEffect(() => {
     refreshUserData();
-    const interval = setInterval(refreshUserData, 8000);
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      refreshUserData();
+    }, 8000);
     return () => clearInterval(interval);
   }, [user?.id]);
 

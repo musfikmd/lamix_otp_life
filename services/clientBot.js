@@ -373,6 +373,15 @@ class ClientBot {
   }
 
   async handleCallback(cb) {
+    if (cb.data === 'feed_otp_btn') {
+      await this.answerCallback(cb.id, '🔒 OTP Code', false);
+      return;
+    }
+    if (cb.data && cb.data.startsWith('copy_otp_')) {
+      const code = cb.data.replace('copy_otp_', '');
+      await this.answerCallback(cb.id, `✅ OTP: ${code}`, false);
+      return;
+    }
     await this.answerCallback(cb.id);
   }
 }

@@ -31,10 +31,17 @@ function writeJson(file, data) {
 class AppServiceManager {
   constructor(supabase) {
     this.supabase = supabase;
+    this.cachedServices = null;
+    this.lastCacheTime = 0;
   }
 
-  // 1. Get all App Services (Supabase primary + JSON sync)
-  async getAppServices() {
+  // 1. Get all App Services (Supabase primary + JSON sync + 20s memory cache)
+  async getAppServices(forceRefresh = false) {
+    const now = Date.now();
+    if (!forceRefresh && this.cachedServices && (now - this.lastCacheTime < 20000)) {
+      return this.cachedServices;
+    }
+
     if (this.supabase) {
       try {
         const { data, error } = await this.supabase
@@ -45,13 +52,18 @@ class AppServiceManager {
         if (!error && Array.isArray(data)) {
           // Keep local JSON in sync
           writeJson(SERVICES_FILE, data);
+          this.cachedServices = data;
+          this.lastCacheTime = now;
           return data;
         }
       } catch (err) {
         console.error('getAppServices Supabase error:', err.message);
       }
     }
-    return readJson(SERVICES_FILE, []);
+    const fallback = readJson(SERVICES_FILE, []);
+    this.cachedServices = fallback;
+    this.lastCacheTime = now;
+    return fallback;
   }
 
   // 2. Create new App Service
@@ -90,6 +102,7 @@ class AppServiceManager {
       list.push(newService);
     }
     writeJson(SERVICES_FILE, list);
+    this.cachedServices = null;
 
     return newService;
   }
@@ -111,6 +124,7 @@ class AppServiceManager {
     // Also remove mappings for this service
     const mappings = readJson(MAPPINGS_FILE, []).filter(m => m.app_service_id !== serviceId);
     writeJson(MAPPINGS_FILE, mappings);
+    this.cachedServices = null;
 
     return true;
   }

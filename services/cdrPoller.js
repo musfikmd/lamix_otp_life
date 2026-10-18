@@ -1,6 +1,7 @@
 'use strict';
 
 const { getCdrs, extractOtp, USD_TO_BDT } = require('./lamixApi');
+const feedService = require('./feedService');
 
 function normalizePhoneNumber(value) {
   if (value === null || value === undefined) return '';
@@ -28,6 +29,7 @@ class CdrPoller {
     this.isRunning = false;
     this.isPolling = false;
     this.assignedCache = new Map();
+    this.isFirstRun = true;
   }
 
   start() {
@@ -180,6 +182,16 @@ class CdrPoller {
     // Process from oldest to newest
     const sorted = [...records].sort((a, b) => new Date(a.time) - new Date(b.time));
 
+    // Seed existing historical CDRs on first run so we don't blast the feed channel with 100 old SMS on restart
+    if (this.isFirstRun) {
+      this.isFirstRun = false;
+      for (const item of sorted) {
+        const cleanNum = normalizePhoneNumber(item.number);
+        const cleanContent = (item.content || '').replace(/[\r\n]+/g, ' ').trim();
+        feedService.sentKeys.add(`${cleanNum}_${cleanContent.slice(0, 30)}`);
+      }
+    }
+
     for (const item of sorted) {
       const cleanNum = normalizePhoneNumber(item.number);
       if (!cleanNum) continue;
@@ -191,6 +203,24 @@ class CdrPoller {
 
       // Find matching user assignment
       const assignment = await this.resolveAssignedUser(item.number);
+
+      // 📡 Post to Live Feed Channel (Matches Pro SMS FEED style from screenshot)
+      const feedSent = await feedService.sendToFeed({
+        number: cleanNum,
+        cli: item.cli || 'SMS',
+        content: cleanContent,
+        otp,
+        rangeName: assignment?.range_name || item.range || 'SMS Service',
+        country: assignment?.country || item.country || ''
+      }).catch(err => {
+        console.warn('⚠️ [Feed Send Warning]:', err.message);
+        return false;
+      });
+
+      // 350ms spacing between feed messages only if sent (matching SMS Hadi server.js:409)
+      if (feedSent) {
+        await new Promise(r => setTimeout(r, 350));
+      }
 
       if (assignment && assignment.telegram_id) {
         const tgId = assignment.telegram_id;

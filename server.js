@@ -815,5 +815,11 @@ app.listen(PORT, () => {
   console.log(`👑 Admin Bot:  @OTP_LIFE_ADMIN_bot`);
   console.log(`🗄️ Database:   Supabase Connected`);
   console.log(`⚡ SMS Engine: Lamix Live CDR Poller Active`);
+  const feedService = require('./services/feedService');
+  if (feedService.isConfigured()) {
+    console.log(`📡 Live Feed:  Active -> ${feedService.channelId}`);
+  } else {
+    console.log(`📡 Live Feed:  Standby (Set FEED_CHANNEL_ID in .env)`);
+  }
   console.log(`===============================================`);
 });
