@@ -293,7 +293,9 @@ app.get('/api/user-data', async (req, res) => {
       count: referrals.length,
       active: activeReferrals,
       bonus: activeReferrals * 10
-    }
+    },
+    withdrawEnabled: Boolean(settingsManager.get('withdraw_enabled')),
+    minWithdraw: Number(settingsManager.get('min_withdraw') || 20)
   });
 });
 

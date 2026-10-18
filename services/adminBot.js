@@ -285,41 +285,115 @@ class AdminBot {
   // 5. Broadcast Message prompt
   async startBroadcast(chatId) {
     this.adminStates.set(chatId, { step: 'awaiting_broadcast' });
+    const cancelKeyboard = {
+      keyboard: [
+        [{ text: '❌ Cancel Broadcast' }]
+      ],
+      resize_keyboard: true
+    };
     await this.sendMessage(
       chatId,
-      '📢 <b>Broadcast Message:</b>\n\n' +
-      'Type the message you want to send to all users, or forward any message:\n\n' +
-      '<i>(Type /cancel to cancel)</i>'
+      '📢 <b>Broadcast Announcement to Clients</b>\n━━━━━━━━━━━━━━━━━━━━\n\n' +
+      'Send any message to broadcast to all clients:\n' +
+      '• 💬 Plain Text Message\n' +
+      '• 📸 Photo (with or without caption)\n' +
+      '• 🎥 Video (with or without caption)\n' +
+      '• 📁 Document / File\n' +
+      '• 🎙️ Voice or Audio Message\n\n' +
+      '<i>Type /cancel or tap the button below to abort.</i>',
+      cancelKeyboard
     );
   }
 
-  // Perform broadcast
-  async performBroadcast(chatId, text) {
+  // Helper to fetch direct Telegram media URL
+  async getMediaFileUrl(fileId) {
+    try {
+      const res = await this.sendRequest('getFile', { file_id: fileId });
+      const filePath = res?.result?.file_path;
+      if (filePath) {
+        return `https://api.telegram.org/file/bot${this.token}/${filePath}`;
+      }
+    } catch (e) {
+      console.warn('⚠️ [AdminBot getMediaFileUrl Warning]:', e.message);
+    }
+    return null;
+  }
+
+  // Perform Rich Media Broadcast (Text, Photo, Video, Document, Voice, Audio)
+  async performBroadcastMedia(chatId, msg) {
     if (!this.supabase || !this.clientBot) {
-      return this.sendMessage(chatId, '❌ Broadcast failed: Client bot instance unavailable.');
+      return this.sendMessage(chatId, '❌ Broadcast failed: Client bot instance unavailable.', this.getAdminReplyKeyboard());
     }
 
     const { data: users } = await this.supabase.from('users').select('telegram_id').limit(100000);
     if (!users || users.length === 0) {
-      return this.sendMessage(chatId, '⚠️ No users found to broadcast.');
+      return this.sendMessage(chatId, '⚠️ No registered clients found to broadcast.', this.getAdminReplyKeyboard());
     }
 
-    await this.sendMessage(chatId, `🚀 Sending notification to ${users.length} users...`);
+    let mediaType = 'text';
+    let mediaUrl = null;
+    const rawCaption = msg.caption || '';
+    const caption = rawCaption ? `📢 <b>Announcement:</b>\n\n${rawCaption}` : null;
 
-    const notificationMsg =
-      `📢 <b>Announcement</b>\n━━━━━━━━━━━━━━━━━━━━\n\n` +
-      `${text}`;
+    if (msg.video) {
+      mediaType = 'video';
+      mediaUrl = await this.getMediaFileUrl(msg.video.file_id);
+    } else if (msg.photo && msg.photo.length > 0) {
+      mediaType = 'photo';
+      const lastPhoto = msg.photo[msg.photo.length - 1];
+      mediaUrl = await this.getMediaFileUrl(lastPhoto.file_id);
+    } else if (msg.document) {
+      mediaType = 'document';
+      mediaUrl = await this.getMediaFileUrl(msg.document.file_id);
+    } else if (msg.voice) {
+      mediaType = 'voice';
+      mediaUrl = await this.getMediaFileUrl(msg.voice.file_id);
+    } else if (msg.audio) {
+      mediaType = 'audio';
+      mediaUrl = await this.getMediaFileUrl(msg.audio.file_id);
+    }
+
+    await this.sendMessage(
+      chatId,
+      `🚀 <b>Broadcasting ${mediaType.toUpperCase()} to ${users.length} clients...</b>\n\n` +
+      `<i>Please wait while delivery completes.</i>`
+    );
 
     let sent = 0;
+    let failed = 0;
+
     for (const u of users) {
+      const uid = u.telegram_id;
       try {
-        await this.clientBot.sendMessage(u.telegram_id, notificationMsg);
+        if (mediaType === 'video' && mediaUrl) {
+          await this.clientBot.sendRequest('sendVideo', { chat_id: uid, video: mediaUrl, caption: caption || undefined, parse_mode: 'HTML' });
+        } else if (mediaType === 'photo' && mediaUrl) {
+          await this.clientBot.sendRequest('sendPhoto', { chat_id: uid, photo: mediaUrl, caption: caption || undefined, parse_mode: 'HTML' });
+        } else if (mediaType === 'document' && mediaUrl) {
+          await this.clientBot.sendRequest('sendDocument', { chat_id: uid, document: mediaUrl, caption: caption || undefined, parse_mode: 'HTML' });
+        } else if (mediaType === 'voice' && mediaUrl) {
+          await this.clientBot.sendRequest('sendVoice', { chat_id: uid, voice: mediaUrl, caption: caption || undefined, parse_mode: 'HTML' });
+        } else if (mediaType === 'audio' && mediaUrl) {
+          await this.clientBot.sendRequest('sendAudio', { chat_id: uid, audio: mediaUrl, caption: caption || undefined, parse_mode: 'HTML' });
+        } else {
+          const textContent = msg.text || msg.caption || '';
+          await this.clientBot.sendMessage(uid, `📢 <b>Announcement</b>\n━━━━━━━━━━━━━━━━━━━━\n\n${textContent}`);
+        }
         sent++;
-        await new Promise((r) => setTimeout(r, 60)); // Rate limit safety
-      } catch (e) {}
+      } catch (e) {
+        failed++;
+      }
+      await new Promise((r) => setTimeout(r, 60)); // Safe rate limit
     }
 
-    await this.sendMessage(chatId, `✅ <b>Broadcast complete!</b> Delivered to ${sent} users.`, this.getAdminReplyKeyboard());
+    await this.sendMessage(
+      chatId,
+      `✅ <b>Broadcast Completed!</b>\n━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `📤 <b>Delivered:</b> ${sent}\n` +
+      `❌ <b>Failed/Blocked:</b> ${failed}\n` +
+      `👥 <b>Total Target:</b> ${users.length}`,
+      this.getAdminReplyKeyboard()
+    );
   }
 
   // 6. Toggle Withdraw
@@ -638,7 +712,7 @@ class AdminBot {
     const text = (msg.text || '').trim();
 
     // Check cancellation
-    if (text === '/cancel') {
+    if (text === '/cancel' || text === '❌ Cancel Broadcast') {
       this.adminStates.delete(chatId);
       return this.sendMessage(chatId, '❌ Operation cancelled.', this.getAdminReplyKeyboard());
     }
@@ -690,11 +764,10 @@ class AdminBot {
     const state = this.adminStates.get(chatId);
 
     if (state) {
-      // A. Awaiting Broadcast Message
+      // A. Awaiting Broadcast Message (Supports Text, Photo, Video, Document, Voice, Audio)
       if (state.step === 'awaiting_broadcast') {
-        const broadcastText = (msg.text || msg.caption || text).trim();
         this.adminStates.delete(chatId);
-        return this.performBroadcast(chatId, broadcastText);
+        return this.performBroadcastMedia(chatId, msg);
       }
 
       // B. Awaiting Min Withdraw Amount
@@ -810,10 +883,10 @@ class AdminBot {
     if (text === '📜 Withdrawal History') {
       return this.handleWithdrawalHistory(chatId);
     }
-    if (text === '📢 Broadcast Message') {
+    if (text === '📢 Broadcast Message' || text.startsWith('/broadcast')) {
       return this.startBroadcast(chatId);
     }
-    if (text.includes('Withdraw: ON') || text.includes('Withdraw: OFF')) {
+    if (text.includes('Withdraw: ON') || text.includes('Withdraw: OFF') || text === '/withdraw_toggle' || text === '/withdraw') {
       return this.handleToggleWithdraw(chatId);
     }
     if (text === '🔄 Sync Number Pool') {
@@ -856,7 +929,7 @@ class AdminBot {
       this.adminStates.delete(chatId);
       if (content) {
         await this.editMessageText(chatId, messageId, '🚀 Broadcast sending started...');
-        return this.performBroadcast(chatId, content);
+        return this.performBroadcastMedia(chatId, { text: content });
       }
       return this.sendMessage(chatId, '⚠️ Broadcast content not found.', this.getAdminReplyKeyboard());
     }

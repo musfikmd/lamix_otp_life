@@ -22,6 +22,7 @@ class ClientBot {
     this.adminBot = null;
     this.lastUpdateId = 0;
     this.isRunning = false;
+    this.joinCache = new Map(); // 60s TTL cache for channel membership checks
   }
 
   isAdmin(chatId) {
@@ -32,6 +33,90 @@ class ClientBot {
       return true;
     }
     return false;
+  }
+
+  // 🛡️ Check if user has joined the mandatory Live SMS Feed channel
+  async checkMustJoin(userId) {
+    if (!userId) return false;
+    if (this.isAdmin(userId)) return true;
+
+    const numId = Number(userId);
+    const cached = this.joinCache.get(numId);
+    if (cached && Date.now() < cached.exp) {
+      return cached.val;
+    }
+
+    let isMember = false;
+    try {
+      const token = process.env.FEED_BOT_TOKEN || this.token;
+      const channelId = process.env.FEED_CHANNEL_ID || '-1003707025386';
+      const res = await axios.post(`https://api.telegram.org/bot${token}/getChatMember`, {
+        chat_id: channelId,
+        user_id: numId
+      });
+
+      const status = res.data?.result?.status;
+      isMember = ['creator', 'administrator', 'member', 'restricted'].includes(status);
+    } catch (err) {
+      const desc = String(err.response?.data?.description || err.message || '');
+      if (desc.includes('PARTICIPANT_ID_INVALID') || desc.includes('USER_NOT_PARTICIPANT')) {
+        isMember = false;
+      } else {
+        console.warn(`⚠️ [MustJoin Check Warning for ${userId}]:`, desc);
+        isMember = true; // Fail-open on network hiccup
+      }
+    }
+
+    this.joinCache.set(numId, { val: isMember, exp: Date.now() + 60000 });
+    return isMember;
+  }
+
+  // ⚠️ Prompt user to set a Telegram username in profile settings
+  async sendUsernameRequiredMessage(chatId, user) {
+    const name = escapeHtml(user?.first_name || 'User');
+    const text =
+      `⚠️ <b>Telegram Username Required!</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `Hello <b>${name}</b>,\n` +
+      `To use <b>OTP LIFE Bot</b>, you MUST set a public <b>Telegram Username</b> (@username) in your profile settings.\n\n` +
+      `<b>📱 How to set a Username:</b>\n` +
+      `1️⃣ Open Telegram <b>Settings</b> ⚙️\n` +
+      `2️⃣ Tap on <b>Username</b> (under your profile)\n` +
+      `3️⃣ Choose any available username and tap <b>Save</b>\n` +
+      `4️⃣ Return here and click the <b>🔄 Check Again</b> button below\n\n` +
+      `<i>⚠️ আপনার টেলিগ্রাম অ্যাকাউন্টে কোনো ইউজারনেম নেই। বট ব্যবহার করতে টেলিগ্রাম সেটিংসে গিয়ে একটি ইউজারনেম (@) সেট করে নিচের বাটনে ক্লিক করুন।</i>`;
+
+    const buttons = {
+      inline_keyboard: [
+        [{ text: '🔄 I Have Set Username (Check Again)', callback_data: 'check_username' }]
+      ]
+    };
+
+    await this.sendMessage(chatId, text, buttons);
+  }
+
+  // 🔒 Send Mandatory Channel Join Gate (Pro SMS FEED & Official Channel)
+  async sendMustJoinGate(chatId, referrerId = null) {
+    const feedChannelUrl = process.env.FEED_CHANNEL_INVITE_URL || 'https://t.me/+enzDm0aDMN4yYjI1';
+    const mainChannelUrl = process.env.MAIN_CHANNEL_URL || 'https://t.me/prosmspanel';
+
+    const text =
+      `🔒 <b>Access Restricted — Must Join Feed Channel</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `To get access to <b>OTP LIFE Bot</b>, you MUST first join our official live SMS feed channel:\n\n` +
+      `📡 1. <a href="${feedChannelUrl}"><b>Pro SMS FEED Channel</b></a> (Live OTP Feed)\n` +
+      `📢 2. <a href="${mainChannelUrl}"><b>Official Updates Channel</b></a>\n\n` +
+      `<i>বট ব্যবহার করতে প্রথমে চ্যানেলগুলোতে জয়েন করুন, তারপর নিচের <b>✅ Verify Join</b> বাটনে ক্লিক করুন:</i>`;
+
+    const buttons = {
+      inline_keyboard: [
+        [{ text: '📡 Join Pro SMS FEED', url: feedChannelUrl }],
+        [{ text: '📢 Join Official Channel', url: mainChannelUrl }],
+        [{ text: '✅ Verify Join', callback_data: referrerId ? `check_join|${referrerId}` : 'check_join' }]
+      ]
+    };
+
+    await this.sendMessage(chatId, text, buttons);
   }
 
   async sendRequest(method, payload) {
@@ -162,11 +247,22 @@ class ClientBot {
     return newUser;
   }
 
-  // 1. /start Handler - NO Reply Keyboard! Clean Mini App Launch
+  // 1. /start Handler - Clean Mini App Launch with Username & Must-Join Gates
   async handleStart(chatId, tgUser, startPayload = '') {
     let referrerId = null;
     if (startPayload && startPayload.startsWith('ref_')) {
       referrerId = startPayload.replace('ref_', '');
+    }
+
+    // 🛡️ Gate 1: Check Telegram Username
+    if (!tgUser?.username) {
+      return this.sendUsernameRequiredMessage(chatId, tgUser);
+    }
+
+    // 🛡️ Gate 2: Check Mandatory Channel Join (Live Feed Channel)
+    const hasJoined = await this.checkMustJoin(tgUser.id);
+    if (!hasJoined) {
+      return this.sendMustJoinGate(chatId, referrerId);
     }
 
     const user = await this.getOrCreateUser(tgUser, referrerId);
@@ -337,6 +433,17 @@ class ClientBot {
     const chatId = msg.chat.id;
     const text = (msg.text || '').trim();
 
+    // 🛡️ Gate 1: Check Telegram Username
+    if (!msg.from?.username) {
+      return this.sendUsernameRequiredMessage(chatId, msg.from);
+    }
+
+    // 🛡️ Gate 2: Check Mandatory Channel Join (Live Feed Channel)
+    const hasJoined = await this.checkMustJoin(msg.from.id);
+    if (!hasJoined) {
+      return this.sendMustJoinGate(chatId);
+    }
+
     if (text.startsWith('/start')) {
       const parts = text.split(' ');
       const payload = parts.length > 1 ? parts[1] : '';
@@ -382,6 +489,64 @@ class ClientBot {
       await this.answerCallback(cb.id, `✅ OTP: ${code}`, false);
       return;
     }
+
+    // 🔄 Username Re-check Callback
+    if (cb.data === 'check_username') {
+      if (!cb.from?.username) {
+        await this.answerCallback(
+          cb.id,
+          '⚠️ Still no username found! Please set a username in Telegram Settings and try again.',
+          true
+        );
+        return;
+      }
+
+      // Username is now present! Check if they joined feed channel
+      const isMember = await this.checkMustJoin(cb.from.id);
+      if (!isMember) {
+        await this.answerCallback(cb.id, '✅ Username detected! Now please join the feed channel.', false);
+        return this.sendMustJoinGate(cb.message.chat.id);
+      }
+
+      await this.answerCallback(cb.id, '✅ Verification successful! Welcome to OTP LIFE.', false);
+      return this.handleStart(cb.message.chat.id, cb.from);
+    }
+
+    // 📡 Channel Join Verification Callback
+    if (cb.data && cb.data.startsWith('check_join')) {
+      if (!cb.from?.username) {
+        await this.answerCallback(
+          cb.id,
+          '⚠️ Please set a username in Telegram profile settings first!',
+          true
+        );
+        return this.sendUsernameRequiredMessage(cb.message.chat.id, cb.from);
+      }
+
+      // Evict join cache to force a fresh verification with Telegram API
+      this.joinCache.delete(Number(cb.from.id));
+
+      const isMember = await this.checkMustJoin(cb.from.id);
+      if (isMember) {
+        await this.answerCallback(cb.id, '✅ Verified! Welcome to OTP LIFE.', false);
+        // Delete join gate message to keep chat clean
+        await this.sendRequest('deleteMessage', {
+          chat_id: cb.message.chat.id,
+          message_id: cb.message.message_id
+        }).catch(() => {});
+
+        const refId = cb.data.includes('|') ? cb.data.split('|')[1] : null;
+        return this.handleStart(cb.message.chat.id, cb.from, refId ? `ref_${refId}` : '');
+      } else {
+        await this.answerCallback(
+          cb.id,
+          '⚠️ You have not joined the Pro SMS FEED channel yet!\n\nPlease join the channel above, then click Verify Join.',
+          true
+        );
+        return;
+      }
+    }
+
     await this.answerCallback(cb.id);
   }
 }
