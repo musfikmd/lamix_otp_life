@@ -195,9 +195,18 @@ class CdrPoller {
       }
     }
 
+    const now = Date.now();
+
     for (const item of sorted) {
       const cleanNum = normalizePhoneNumber(item.number);
       if (!cleanNum) continue;
+
+      const smsTimestamp = new Date(item.time).getTime();
+
+      // 🛡️ Safety Filter 1: Skip stale historical CDRs older than 60 minutes
+      if (!isNaN(smsTimestamp) && (now - smsTimestamp > 60 * 60 * 1000)) {
+        continue;
+      }
 
       const cleanContent = (item.content || '').replace(/[\r\n]+/g, ' ').trim();
       const otp = extractOtp(cleanContent);
@@ -206,6 +215,16 @@ class CdrPoller {
 
       // Find matching user assignment
       const assignment = await this.resolveAssignedUser(item.number);
+
+      // 🛡️ Safety Filter 2: Skip SMS that arrived BEFORE number was assigned to this user
+      if (assignment && assignment.assigned_at) {
+        const assignedTimestamp = new Date(assignment.assigned_at).getTime();
+        // Allow up to 30s grace for server clock sync differences
+        if (!isNaN(smsTimestamp) && !isNaN(assignedTimestamp) && smsTimestamp < (assignedTimestamp - 30000)) {
+          console.log(`⚠️ [Pre-assignment SMS Ignored] +${cleanNum} | SMS time (${item.time}) is BEFORE assignment (${assignment.assigned_at})`);
+          continue;
+        }
+      }
 
       // 📡 Post to Live Feed Channel (Matches Pro SMS FEED style from screenshot)
       const feedSent = await feedService.sendToFeed({

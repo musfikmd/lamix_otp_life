@@ -343,7 +343,6 @@ class ClientBot {
       `━━━━━━━━━━━━━━━━━━━\n` +
       `📲 <b>Number:</b> <code>${cleanNum}</code>\n` +
       `📤 <b>From:</b> <b>${safeCli}</b>\n` +
-      (safeServiceName ? `📱 <b>Service:</b> ${safeServiceName}\n` : '') +
       `💬 <b>Message:</b>\n<code>${safeContent}</code>\n` +
       `━━━━━━━━━━━━━━━━━━━\n` +
       (safeOtp ? `🔑 <b>OTP Code:</b> <code>${safeOtp}</code>\n` : '') +
