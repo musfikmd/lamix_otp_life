@@ -18,9 +18,9 @@ async function updateBotButtons(url) {
     }
     if (ADMIN_TOKEN) {
       await axios.post(`https://api.telegram.org/bot${ADMIN_TOKEN}/setChatMenuButton`, {
-        menu_button: { type: 'web_app', text: '👑 Admin Panel', web_app: { url: `${url}/?admin=true` } }
+        menu_button: { type: 'default' }
       });
-      console.log('✅ Admin Bot menu button updated to:', `${url}/?admin=true`);
+      console.log('✅ Admin Bot menu button secured to default (requires password).');
     }
   } catch (e) {
     console.error('Error updating bot buttons:', e.response?.data || e.message);

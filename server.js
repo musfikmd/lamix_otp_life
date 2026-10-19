@@ -23,26 +23,10 @@ const WEBAPP_URL = process.env.WEBAPP_URL || `http://localhost:${PORT}`;
 app.use(cors());
 app.use(express.json());
 
+const { extractCountryInfo } = require('./services/otpExtractor');
+
 function getCountryFlag(country = '', dialCode = '') {
-  const c = String(country || '').toLowerCase();
-  const d = String(dialCode || '').replace('+', '');
-  if (c.includes('philippine')) return '🇵🇭';
-  if (c.includes('malaysia')) return '🇲🇾';
-  if (c.includes('kenya')) return '🇰🇪';
-  if (c.includes('algeria')) return '🇩🇿';
-  if (c.includes('nigeria')) return '🇳🇬';
-  if (c.includes('pakistan')) return '🇵🇰';
-  if (c.includes('somalia')) return '🇸🇴';
-  if (c.includes('cameroon')) return '🇨🇲';
-  if (d.startsWith('213')) return '🇩🇿';
-  if (d.startsWith('60')) return '🇲🇾';
-  if (d.startsWith('254')) return '🇰🇪';
-  if (d.startsWith('63')) return '🇵🇭';
-  if (d.startsWith('234')) return '🇳🇬';
-  if (d.startsWith('92')) return '🇵🇰';
-  if (d.startsWith('252')) return '🇸🇴';
-  if (d.startsWith('237')) return '🇨🇲';
-  return '🌐';
+  return extractCountryInfo(country, dialCode).flag || '🌐';
 }
 
 // Telegram WebApp initData validation helper
@@ -80,7 +64,7 @@ let cdrPoller = null;
 
 if (CLIENT_BOT_TOKEN && ADMIN_BOT_TOKEN) {
   // 1. Admin Bot
-  adminBot = new AdminBot(ADMIN_BOT_TOKEN, supabase, null, appServiceManager);
+  adminBot = new AdminBot(ADMIN_BOT_TOKEN, supabase, null, appServiceManager, WEBAPP_URL);
 
   // 2. Client Bot (with callback to notify Admin Bot on withdrawal)
   clientBot = new ClientBot(CLIENT_BOT_TOKEN, supabase, WEBAPP_URL, (withdrawalData) => {
@@ -543,6 +527,16 @@ app.post('/api/withdraw', async (req, res) => {
   }
 
   res.json({ success: true, withdrawal: wd });
+});
+
+// Admin Password Verification Endpoint
+app.post('/api/admin/verify-password', (req, res) => {
+  const { password } = req.body;
+  const targetPassword = String(settingsManager.get('admin_password') || 'WHALE@123').trim().toUpperCase();
+  if (password && String(password).trim().toUpperCase() === targetPassword) {
+    return res.json({ success: true, message: 'Authenticated successfully' });
+  }
+  return res.status(401).json({ success: false, error: 'Incorrect admin password' });
 });
 
 // Admin Overview API (Real counts, real pending withdrawals from Supabase)

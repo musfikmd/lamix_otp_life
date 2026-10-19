@@ -2,7 +2,7 @@ import React from 'react';
 import { useTelegram } from '../context/TelegramContext';
 import { LayoutGrid, Inbox, Wallet, Users } from 'lucide-react';
 
-export const BottomNav = ({ activeTab, setActiveTab, activeNumbersCount }) => {
+export const BottomNav = ({ activeTab, setActiveTab, activeNumbersCount, smsCount = 0 }) => {
   const { triggerHaptic } = useTelegram();
 
   const tabs = [
@@ -16,6 +16,7 @@ export const BottomNav = ({ activeTab, setActiveTab, activeNumbersCount }) => {
       label: 'Numbers & OTP',
       icon: Inbox,
       badge: activeNumbersCount > 0 ? activeNumbersCount : null,
+      smsBadge: smsCount > 0 ? smsCount : null,
     },
     {
       id: 'wallet',
@@ -54,6 +55,11 @@ export const BottomNav = ({ activeTab, setActiveTab, activeNumbersCount }) => {
                 {tab.badge && (
                   <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-emerald-600 text-[10px] font-bold text-white flex items-center justify-center shadow-md animate-pulse">
                     {tab.badge}
+                  </span>
+                )}
+                {tab.smsBadge && !tab.badge && (
+                  <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-[10px] font-bold text-white flex items-center justify-center shadow-md animate-pulse">
+                    {tab.smsBadge}
                   </span>
                 )}
               </div>

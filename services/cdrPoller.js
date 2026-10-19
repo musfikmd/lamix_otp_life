@@ -60,16 +60,16 @@ class CdrPoller {
     }
   }
 
-  // Load active assigned numbers into memory cache for fast, zero-delay lookups
+  // Load assignments from the last 24 hours into memory cache for instant, zero-delay lookups
   async loadActiveAssignments() {
     if (!this.supabase) return;
     try {
-      const nowIso = new Date().toISOString();
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { data, error } = await this.supabase
         .from('assigned_numbers')
         .select('*')
-        .eq('status', 'ACTIVE')
-        .gt('expires_at', nowIso)
+        .gte('assigned_at', oneDayAgo)
+        .order('assigned_at', { ascending: false })
         .limit(100000);
 
       if (!error && data) {
@@ -77,56 +77,83 @@ class CdrPoller {
         for (const row of data) {
           const norm = normalizePhoneNumber(row.number);
           if (norm) {
-            this.assignedCache.set(norm, row);
+            if (!this.assignedCache.has(norm)) {
+              this.assignedCache.set(norm, []);
+            }
+            this.assignedCache.get(norm).push(row);
           }
         }
       }
     } catch (e) {
-      console.warn('⚠️ [CDR Poller] Failed to load active assignments cache:', e.message);
+      console.warn('⚠️ [CDR Poller] Failed to load assignments cache:', e.message);
     }
   }
 
-  // Robust multi-variant matching to find the exact user who owns this number
-  async resolveAssignedUser(rawNumber) {
+  // Robust timestamp-aware matching: finds the exact user who owned the number when the SMS arrived
+  async resolveAssignedUser(rawNumber, smsTimestamp = Date.now()) {
     if (!rawNumber) return null;
     const digits = normalizePhoneNumber(rawNumber);
     if (!digits) return null;
 
+    const findBestMatch = (rows) => {
+      if (!rows || rows.length === 0) return null;
+      // Rows are sorted descending by assigned_at
+      for (const row of rows) {
+        const assignedTime = new Date(row.assigned_at).getTime();
+        const expiresTime = new Date(row.expires_at).getTime();
+
+        // Check if SMS arrived after assignment started (allow 45s clock skew)
+        if (smsTimestamp >= (assignedTime - 45000)) {
+          // If still ACTIVE, or SMS arrived before expiration
+          if (row.status === 'ACTIVE') {
+            return row;
+          }
+          if (!isNaN(expiresTime) && smsTimestamp <= expiresTime) {
+            return row;
+          }
+          // If user clicked release recently (within 24 hours of assignment)
+          if (row.status === 'RELEASED' && (smsTimestamp - assignedTime) < (24 * 60 * 60 * 1000)) {
+            return row;
+          }
+        }
+      }
+      return null;
+    };
+
     // 1. Check in-memory cache directly
     if (this.assignedCache.has(digits)) {
-      return this.assignedCache.get(digits);
+      const match = findBestMatch(this.assignedCache.get(digits));
+      if (match) return match;
     }
 
     // 2. Check variants against in-memory cache
-    for (const [cachedNum, row] of this.assignedCache.entries()) {
-      const variants = buildPhoneVariants(cachedNum);
-      if (variants.includes(digits) || cachedNum.endsWith(digits) || digits.endsWith(cachedNum)) {
+    for (const [cachedNum, rows] of this.assignedCache.entries()) {
+      if (cachedNum.endsWith(digits) || digits.endsWith(cachedNum)) {
         if (Math.min(cachedNum.length, digits.length) >= 8) {
-          return row;
+          const match = findBestMatch(rows);
+          if (match) return match;
         }
       }
     }
 
-    // 3. Fallback direct DB query in case assignment just occurred (up to 1 lac limit)
+    // 3. Fallback direct DB query in case assignment just occurred
     try {
-      const nowIso = new Date().toISOString();
+      const variants = buildPhoneVariants(digits);
       const { data: dbRows } = await this.supabase
         .from('assigned_numbers')
         .select('*')
-        .eq('status', 'ACTIVE')
-        .gt('expires_at', nowIso)
+        .in('number', variants)
         .order('assigned_at', { ascending: false })
-        .limit(100000);
+        .limit(20);
 
       if (dbRows && dbRows.length > 0) {
-        for (const row of dbRows) {
-          const rowDigits = normalizePhoneNumber(row.number);
-          if (rowDigits === digits || rowDigits.endsWith(digits) || digits.endsWith(rowDigits)) {
-            if (Math.min(rowDigits.length, digits.length) >= 8) {
-              this.assignedCache.set(rowDigits, row);
-              return row;
-            }
+        const match = findBestMatch(dbRows);
+        if (match) {
+          if (!this.assignedCache.has(digits)) {
+            this.assignedCache.set(digits, []);
           }
+          this.assignedCache.get(digits).unshift(match);
+          return match;
         }
       }
     } catch (e) {
@@ -175,7 +202,7 @@ class CdrPoller {
     // 1. Run expired cleanup
     await this.cleanupExpiredNumbers();
 
-    // 2. Refresh active assignments cache
+    // 2. Refresh assignments cache (24 hours history)
     await this.loadActiveAssignments();
 
     // 3. Fetch CDRs from Lamix Mother API
@@ -186,12 +213,19 @@ class CdrPoller {
     const sorted = [...records].sort((a, b) => new Date(a.time) - new Date(b.time));
 
     // Seed existing historical CDRs on first run so we don't blast the feed channel with 100 old SMS on restart
+    // BUT allow CDRs from the last 5 minutes through so genuinely new SMS still reach the feed
     if (this.isFirstRun) {
       this.isFirstRun = false;
+      const fiveMinAgo = Date.now() - (5 * 60 * 1000);
       for (const item of sorted) {
-        const cleanNum = normalizePhoneNumber(item.number);
-        const cleanContent = (item.content || '').replace(/[\r\n]+/g, ' ').trim();
-        feedService.sentKeys.add(`${cleanNum}_${cleanContent.slice(0, 30)}`);
+        const itemTime = new Date(item.time).getTime();
+        if (!isNaN(itemTime) && itemTime < fiveMinAgo) {
+          const cleanNum = normalizePhoneNumber(item.number);
+          const cleanContent = (item.content || '').replace(/[\r\n]+/g, ' ').trim();
+          const otp = extractOtp(cleanContent);
+          const dedupKey = otp ? `${cleanNum}_${otp}` : `${cleanNum}_${cleanContent.slice(0, 80)}`;
+          feedService.sentKeys.add(dedupKey);
+        }
       }
     }
 
@@ -213,27 +247,14 @@ class CdrPoller {
       const payoutUsd = parseFloat(item.payout) || 0.01;
       const cdrTime = item.time;
 
-      // Find matching user assignment
-      const assignment = await this.resolveAssignedUser(item.number);
-
-      // 🛡️ Safety Filter 2: Skip SMS that arrived BEFORE number was assigned to this user
-      if (assignment && assignment.assigned_at) {
-        const assignedTimestamp = new Date(assignment.assigned_at).getTime();
-        // Allow up to 30s grace for server clock sync differences
-        if (!isNaN(smsTimestamp) && !isNaN(assignedTimestamp) && smsTimestamp < (assignedTimestamp - 30000)) {
-          console.log(`⚠️ [Pre-assignment SMS Ignored] +${cleanNum} | SMS time (${item.time}) is BEFORE assignment (${assignment.assigned_at})`);
-          continue;
-        }
-      }
-
-      // 📡 Post to Live Feed Channel (Matches Pro SMS FEED style from screenshot)
+      // 📡 1. Post to Live Feed Channel FIRST (public feed should NEVER be blocked by user assignment state)
       const feedSent = await feedService.sendToFeed({
         number: cleanNum,
         cli: item.cli || 'SMS',
         content: cleanContent,
         otp,
-        rangeName: assignment?.range_name || item.range || 'SMS Service',
-        country: assignment?.country || item.country || ''
+        rangeName: item.range || 'SMS Service',
+        country: item.country || ''
       }).catch(err => {
         console.warn('⚠️ [Feed Send Warning]:', err.message);
         return false;
@@ -243,6 +264,9 @@ class CdrPoller {
       if (feedSent) {
         await new Promise(r => setTimeout(r, 350));
       }
+
+      // 👤 2. Find matching user assignment for this SMS at its arrival timestamp
+      const assignment = await this.resolveAssignedUser(item.number, smsTimestamp);
 
       if (assignment && assignment.telegram_id) {
         const tgId = assignment.telegram_id;

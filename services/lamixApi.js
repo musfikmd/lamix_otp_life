@@ -130,23 +130,8 @@ async function getCdrs(params = {}) {
   }
 }
 
-// 4. Extract OTP code from SMS text
-function extractOtp(content) {
-  if (!content) return null;
-  const text = String(content).trim();
-
-  // Pattern 1: Pure numbers or dash-separated numbers (e.g. 123456, 242-511, 402738)
-  const numMatch = text.match(/\b\d{3}[-\s]?\d{3,4}\b/) || text.match(/\b\d{4,8}\b/);
-  if (numMatch) return numMatch[0].replace(/\D/g, '');
-
-  // Pattern 2: Alphanumeric codes (e.g. G-123456, FB-89012)
-  const alphaMatch = text.match(/\b[A-Z0-9]{1,4}[-\s]?[A-Z0-9]{3,8}\b/i);
-  if (alphaMatch && /[0-9]/.test(alphaMatch[0]) && alphaMatch[0].length <= 12) {
-    return alphaMatch[0].trim();
-  }
-
-  return null;
-}
+// 4. Universal OTP extraction engine
+const { extractOtp } = require('./otpExtractor');
 
 // 5. Fetch ALL live numbers for a specific range using cursor pagination
 async function getAllLiveNumbersForRange(rangeId, onProgress = null) {

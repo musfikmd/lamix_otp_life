@@ -25,11 +25,12 @@ function saveAuthenticatedAdmins(adminSet) {
 }
 
 class AdminBot {
-  constructor(token, supabase, clientBotInstance, appServiceManager) {
+  constructor(token, supabase, clientBotInstance, appServiceManager, webAppUrl = '') {
     this.token = token;
     this.supabase = supabase;
     this.clientBot = clientBotInstance;
     this.appServiceManager = appServiceManager;
+    this.webAppUrl = webAppUrl || process.env.WEBAPP_URL || '';
     this.authenticatedAdmins = loadAuthenticatedAdmins();
     this.adminStates = new Map();
     this.lastUpdateId = 0;
@@ -107,8 +108,11 @@ class AdminBot {
   // Get Admin Reply Keyboard Menu
   getAdminReplyKeyboard() {
     const withdrawEnabled = settingsManager.get('withdraw_enabled');
+    const adminUrl = this.webAppUrl ? `${this.webAppUrl}/?admin=true` : (process.env.WEBAPP_URL ? `${process.env.WEBAPP_URL}/?admin=true` : '');
+    const topRow = adminUrl ? [[{ text: '👑 Open Admin Web App', web_app: { url: adminUrl } }]] : [];
     return {
       keyboard: [
+        ...topRow,
         [{ text: '📊 System Stats' }, { text: '⏳ Pending Withdrawals' }],
         [{ text: '👥 Client List' }, { text: '📜 Withdrawal History' }],
         [{ text: '📢 Broadcast Message' }, { text: withdrawEnabled ? '🟢 Withdraw: ON' : '🔴 Withdraw: OFF' }],
@@ -130,7 +134,8 @@ class AdminBot {
     await this.sendMessage(
       chatId,
       '🔒 <b>Welcome to Admin Control Bot!</b>\n\n' +
-      'Enter the admin password to access the panel:'
+      'Please enter the admin password to access the panel:',
+      { remove_keyboard: true }
     );
   }
 
@@ -139,9 +144,30 @@ class AdminBot {
     const text =
       `👑 <b>Welcome to Admin Control Panel!</b>\n\n` +
       `✅ <b>Access granted.</b>\n\n` +
-      `<i>Use the menu buttons below to manage numbers, services, clients, and withdrawals:</i>`;
+      `<i>Use the buttons below to manage system stats, withdrawals, and services:</i>`;
 
-    await this.sendMessage(chatId, text, this.getAdminReplyKeyboard());
+    const adminUrl = this.webAppUrl ? `${this.webAppUrl}/?admin=true` : (process.env.WEBAPP_URL ? `${process.env.WEBAPP_URL}/?admin=true` : '');
+    const inlineKeyboard = [];
+    if (adminUrl) {
+      inlineKeyboard.push([
+        { text: '🚀 Open Admin Web App', web_app: { url: adminUrl } }
+      ]);
+      await this.sendRequest('setChatMenuButton', {
+        chat_id: chatId,
+        menu_button: {
+          type: 'web_app',
+          text: '👑 Admin Panel',
+          web_app: { url: adminUrl }
+        }
+      }).catch(() => {});
+    }
+
+    if (inlineKeyboard.length > 0) {
+      await this.sendMessage(chatId, text, { inline_keyboard: inlineKeyboard });
+    } else {
+      await this.sendMessage(chatId, text);
+    }
+    await this.sendMessage(chatId, '🎛️ <b>Admin Quick Menu:</b>', this.getAdminReplyKeyboard());
   }
 
   // 1. System Stats
@@ -668,6 +694,8 @@ class AdminBot {
     if (this.isRunning) return;
     this.isRunning = true;
     console.log('👑 Admin Bot (@OTP_LIFE_ADMIN_bot) polling started...');
+    // Ensure default menu button does NOT show web_app button to unauthenticated users
+    this.sendRequest('setChatMenuButton', { menu_button: { type: 'default' } }).catch(() => {});
     this.pollUpdates();
   }
 
@@ -717,6 +745,15 @@ class AdminBot {
       return this.sendMessage(chatId, '❌ Operation cancelled.', this.getAdminReplyKeyboard());
     }
 
+    // Check logout command
+    if (text === '/logout') {
+      this.authenticatedAdmins.delete(Number(chatId));
+      saveAuthenticatedAdmins(this.authenticatedAdmins);
+      this.adminStates.delete(chatId);
+      await this.sendRequest('setChatMenuButton', { chat_id: chatId, menu_button: { type: 'default' } }).catch(() => {});
+      return this.sendMessage(chatId, '🔒 You have been logged out of Admin Panel.', { remove_keyboard: true });
+    }
+
     // 1. /start or /menu Command
     if (text === '/start' || text.startsWith('/start') || text === '/menu' || text.toLowerCase() === 'menu') {
       return this.handleStart(chatId);
@@ -730,6 +767,19 @@ class AdminBot {
         this.authenticatedAdmins.add(Number(chatId));
         saveAuthenticatedAdmins(this.authenticatedAdmins);
         this.adminStates.delete(chatId);
+
+        // Set WebApp menu button ONLY for this verified admin
+        if (this.webAppUrl) {
+          await this.sendRequest('setChatMenuButton', {
+            chat_id: chatId,
+            menu_button: {
+              type: 'web_app',
+              text: '👑 Open Admin App',
+              web_app: { url: `${this.webAppUrl}/?admin=true` }
+            }
+          }).catch(() => {});
+        }
+
         return this.showDashboard(chatId);
       } else {
         return this.sendMessage(

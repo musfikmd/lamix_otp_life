@@ -1,10 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useTelegram } from '../context/TelegramContext';
 import { 
   Copy, 
   Check, 
   Clock, 
-  Trash2, 
   MessageSquare,
   Phone,
   ChevronDown,
@@ -29,6 +28,16 @@ export const InboxView = ({
   const [activeTab, setActiveTab] = useState(
     activeNumbers.length > 0 ? 'numbers' : (smsMessages.length > 0 ? 'otps' : 'numbers')
   );
+  const prevSmsCountRef = useRef(smsMessages.length);
+
+  // Auto-switch to OTPs tab when new SMS arrives
+  useEffect(() => {
+    if (smsMessages.length > prevSmsCountRef.current && prevSmsCountRef.current >= 0) {
+      setActiveTab('otps');
+      triggerHaptic('success');
+    }
+    prevSmsCountRef.current = smsMessages.length;
+  }, [smsMessages.length]);
 
   // Group active numbers by service name & compute statistics
   const serviceGroups = useMemo(() => {
@@ -414,17 +423,6 @@ export const InboxView = ({
                                         <span>Copy</span>
                                       </>
                                     )}
-                                  </button>
-
-                                  <button
-                                    onClick={() => {
-                                      triggerHaptic('error');
-                                      onReleaseNumber(item.id);
-                                    }}
-                                    className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 transition-colors"
-                                    title="Release / Cancel Number"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
                               </div>

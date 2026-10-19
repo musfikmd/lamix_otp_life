@@ -12,11 +12,24 @@ import {
   Trash2,
   Link2,
   Unlink,
-  ChevronRight
+  ChevronRight,
+  Lock,
+  Key,
+  LogOut,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 export const AdminDashboardView = () => {
   const { triggerHaptic } = useTelegram();
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return typeof window !== 'undefined' && sessionStorage.getItem('admin_authenticated') === 'true';
+  });
+  const [passwordInput, setPasswordInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
+
   const [activeSubTab, setActiveSubTab] = useState('services');
   const [stats, setStats] = useState({
     pendingWithdrawals: 0,
@@ -139,10 +152,42 @@ export const AdminDashboardView = () => {
     }
   };
 
+  const handleVerifyPassword = async (e) => {
+    e?.preventDefault?.();
+    if (!passwordInput.trim()) {
+      setAuthError('Please enter the admin password');
+      return;
+    }
+    setIsVerifying(true);
+    setAuthError('');
+    try {
+      const res = await fetch('/api/admin/verify-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: passwordInput.trim() })
+      });
+      const data = await res.json();
+      setIsVerifying(false);
+      if (data?.success) {
+        sessionStorage.setItem('admin_authenticated', 'true');
+        setIsAuthenticated(true);
+        triggerHaptic('success');
+      } else {
+        triggerHaptic('error');
+        setAuthError(data?.error || 'Incorrect admin password');
+      }
+    } catch (err) {
+      setIsVerifying(false);
+      setAuthError('Network error, please try again');
+    }
+  };
+
   useEffect(() => {
-    fetchOverview();
-    fetchAvailableRanges();
-  }, []);
+    if (isAuthenticated) {
+      fetchOverview();
+      fetchAvailableRanges();
+    }
+  }, [isAuthenticated]);
 
   // 1. Approve Withdrawal
   const handleApproveWithdrawal = async (id) => {
@@ -337,6 +382,73 @@ export const AdminDashboardView = () => {
     }
   };
 
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center p-4">
+        <div className="w-full max-w-sm p-6 rounded-3xl bg-[#FFFFFF] border border-[#EBE3D8] shadow-xl text-center">
+          <div className="w-16 h-16 rounded-3xl bg-[#5C3824]/10 border border-[#5C3824]/20 flex items-center justify-center mx-auto mb-4 text-[#5C3824]">
+            <Lock className="w-8 h-8" />
+          </div>
+
+          <h2 className="text-xl font-black text-[#5C3824] mb-1">
+            Admin Panel Locked
+          </h2>
+          <p className="text-xs text-[#826A5C] mb-6">
+            Enter the admin password to access control center
+          </p>
+
+          <form onSubmit={handleVerifyPassword} className="space-y-4">
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={passwordInput}
+                onChange={(e) => {
+                  setPasswordInput(e.target.value);
+                  setAuthError('');
+                }}
+                placeholder="Admin Password..."
+                className="w-full px-4 py-3 pr-10 rounded-2xl bg-[#FAF7F2] border border-[#EBE3D8] text-sm text-[#5C3824] font-medium placeholder-[#A8988D] focus:outline-none focus:border-[#5C3824]"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#826A5C] hover:text-[#5C3824]"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+
+            {authError && (
+              <p className="text-xs font-bold text-rose-600 bg-rose-50 py-1.5 px-3 rounded-xl border border-rose-200">
+                {authError}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={isVerifying}
+              className="w-full py-3 rounded-2xl bg-[#5C3824] hover:bg-[#4A2E1F] active:scale-[0.98] text-white font-bold text-sm shadow-md shadow-[#5C3824]/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <Key className="w-4 h-4" />
+              <span>{isVerifying ? 'Verifying...' : 'Unlock Admin Panel'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = '/';
+              }}
+              className="w-full py-2.5 rounded-2xl bg-transparent hover:bg-[#FAF7F2] text-xs font-bold text-[#826A5C] transition-colors"
+            >
+              ← Back to Client App
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="pb-24 pt-2 px-4 space-y-4">
       {/* Toast Notification */}
@@ -367,14 +479,27 @@ export const AdminDashboardView = () => {
           </div>
         </div>
 
-        <button
-          onClick={handleSyncNumbers}
-          disabled={isSyncing}
-          className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 active:scale-95 text-xs font-bold text-white flex items-center gap-1.5 border border-white/25 transition-all disabled:opacity-50"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-          <span>{isSyncing ? 'Syncing...' : 'Sync Pool'}</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSyncNumbers}
+            disabled={isSyncing}
+            className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 active:scale-95 text-xs font-bold text-white flex items-center gap-1.5 border border-white/25 transition-all disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span>{isSyncing ? 'Syncing...' : 'Sync Pool'}</span>
+          </button>
+          <button
+            onClick={() => {
+              sessionStorage.removeItem('admin_authenticated');
+              setIsAuthenticated(false);
+              triggerHaptic('medium');
+            }}
+            title="Lock / Logout"
+            className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* 4 Stats Cards */}

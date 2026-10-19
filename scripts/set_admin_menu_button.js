@@ -8,9 +8,7 @@ async function setAdminMenu() {
   try {
     const res = await axios.post(`https://api.telegram.org/bot${token}/setChatMenuButton`, {
       menu_button: {
-        type: 'web_app',
-        text: '👑 Admin Panel',
-        web_app: { url }
+        type: 'default'
       }
     });
     console.log('Admin setChatMenuButton result:', res.data);

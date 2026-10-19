@@ -247,6 +247,7 @@ function MainApp() {
             activeTab={activeTab}
             setActiveTab={setActiveTab}
             activeNumbersCount={activeNumbers.length}
+            smsCount={smsMessages.length}
           />
         </>
       )}

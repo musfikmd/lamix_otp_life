@@ -10,7 +10,9 @@ const COUNTRY_FLAGS = {
   uganda: '🇺🇬', ghana: '🇬🇭', cameroon: '🇨🇲', senegal: '🇸🇳', morocco: '🇲🇦',
   algeria: '🇩🇿', egypt: '🇪🇬', ukraine: '🇺🇦', georgia: '🇬🇪', moldova: '🇲🇩',
   ecuador: '🇪🇨', venezuela: '🇻🇪', zambia: '🇿🇲', zimbabwe: '🇿🇼', rwanda: '🇷🇼',
-  uzbekistan: '🇺🇿', kazakhstan: '🇰🇿', russia: '🇷🇺', turkey: '🇹🇷', default: '🌍'
+  uzbekistan: '🇺🇿', kazakhstan: '🇰🇿', russia: '🇷🇺', turkey: '🇹🇷',
+  yemen: '🇾🇪', somalia: '🇸🇴', iraq: '🇮🇶', syria: '🇸🇾', jordan: '🇯🇴',
+  'saudi arabia': '🇸🇦', oman: '🇴🇲', default: '🌍'
 };
 
 const COUNTRY_2LETTER_CODES = {
@@ -20,7 +22,9 @@ const COUNTRY_2LETTER_CODES = {
   uganda: 'UG', ghana: 'GH', cameroon: 'CM', senegal: 'SN', morocco: 'MA',
   algeria: 'DZ', egypt: 'EG', ukraine: 'UA', georgia: 'GE', moldova: 'MD',
   ecuador: 'EC', venezuela: 'VE', zambia: 'ZM', zimbabwe: 'ZW', rwanda: 'RW',
-  uzbekistan: 'UZ', kazakhstan: 'KZ', russia: 'RU', turkey: 'TR'
+  uzbekistan: 'UZ', kazakhstan: 'KZ', russia: 'RU', turkey: 'TR',
+  yemen: 'YE', somalia: 'SO', iraq: 'IQ', syria: 'SY', jordan: 'JO',
+  'saudi arabia': 'SA', oman: 'OM'
 };
 
 const PHONE_PREFIX_COUNTRY = {
@@ -45,7 +49,15 @@ const PHONE_PREFIX_COUNTRY = {
   '998': 'Uzbekistan',
   '7': 'Russia',
   '90': 'Turkey',
-  '380': 'Ukraine'
+  '380': 'Ukraine',
+  '967': 'Yemen',
+  '252': 'Somalia',
+  '964': 'Iraq',
+  '963': 'Syria',
+  '962': 'Jordan',
+  '966': 'Saudi Arabia',
+  '968': 'Oman',
+  '237': 'Cameroon'
 };
 
 const esc = s => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -77,90 +89,30 @@ class FeedService {
     return `${head}****${tail}`;
   }
 
-  // Exact OTP extraction matching SMS Hadi (server.js:332)
+  // Universal extraction engine (OTP, Service, Country)
   extractOtpCode(smsText) {
-    if (!smsText) return null;
-    const numMatch = smsText.match(/\b\d{3}[-\s]?\d{3,4}\b/) || smsText.match(/\b\d{3,10}\b/);
-    if (numMatch) return numMatch[0].replace(/\D/g, '');
-
-    const alphaMatch = smsText.match(/\b[A-Z0-9]{1,4}[-\s]?[A-Z0-9]{3,8}\b/i);
-    if (alphaMatch && /[0-9]/.test(alphaMatch[0]) && alphaMatch[0].length <= 12) {
-      return alphaMatch[0].trim();
-    }
-    return null;
+    const { extractOtp } = require('./otpExtractor');
+    return extractOtp(smsText);
   }
 
-  // Country extraction matching SMS Hadi (numberPool.js:125)
   extractCountry(rangeTitle, sampleNumber = '') {
-    const lower = (rangeTitle || '').toLowerCase();
-    for (const key of Object.keys(COUNTRY_FLAGS)) {
-      if (key !== 'default' && lower.includes(key)) {
-        return key.charAt(0).toUpperCase() + key.slice(1);
-      }
-    }
-    const digits = String(sampleNumber || '').replace(/^\+/, '').replace(/\D/g, '');
-    if (digits) {
-      for (const len of [3, 2, 1]) {
-        const prefix = digits.slice(0, len);
-        if (PHONE_PREFIX_COUNTRY[prefix]) return PHONE_PREFIX_COUNTRY[prefix];
-      }
-    }
-    const firstWord = (rangeTitle || '').trim().split(/[\s,\-_]+/)[0] || 'Global';
-    if (/^\d+$/.test(firstWord) && PHONE_PREFIX_COUNTRY[firstWord]) {
-      return PHONE_PREFIX_COUNTRY[firstWord];
-    }
-    return 'Global';
+    const { extractCountryInfo } = require('./otpExtractor');
+    return extractCountryInfo(rangeTitle, sampleNumber).name;
   }
 
   getCountryCode2Letter(countryName) {
-    const key = (countryName || '').toLowerCase();
-    return COUNTRY_2LETTER_CODES[key] || 'GL';
+    const { extractCountryInfo } = require('./otpExtractor');
+    return extractCountryInfo(countryName).code;
   }
 
   getFlag(country) {
-    const key = (country || '').toLowerCase();
-    return COUNTRY_FLAGS[key] || COUNTRY_FLAGS['default'];
+    const { extractCountryInfo } = require('./otpExtractor');
+    return extractCountryInfo(country).flag;
   }
 
-  // Exact service name detection matching SMS Hadi (server.js:348)
   extractServiceName(smsText, cli, cleanRange) {
-    const text = `${smsText || ''} ${cli || ''}`;
-    const lower = text.toLowerCase();
-
-    if (lower.includes('shopee')) return 'Shopee';
-    if (lower.includes('facebook') || lower.includes('fb-') || lower.includes('fbcode')) return 'Facebook';
-    if (lower.includes('whatsapp')) return 'WhatsApp';
-    if (lower.includes('telegram')) return 'Telegram';
-    if (lower.includes('tiktok')) return 'TikTok';
-    if (lower.includes('google')) return 'Google';
-    if (lower.includes('imo')) return 'Imo';
-    if (lower.includes('paypal')) return 'PayPal';
-    if (lower.includes('discord')) return 'Discord';
-    if (lower.includes('apple')) return 'Apple';
-    if (lower.includes('hsbc')) return 'HSBC';
-    if (lower.includes('biamo')) return 'Biamo';
-    if (lower.includes('viber')) return 'Viber';
-    if (lower.includes('line')) return 'LINE';
-    if (lower.includes('signal')) return 'Signal';
-    if (lower.includes('megapari')) return 'Megapari';
-    if (lower.includes('atome')) return 'Atome';
-    if (lower.includes('binance')) return 'Binance';
-    if (lower.includes('bkash')) return 'bKash';
-    if (lower.includes('nagad')) return 'Nagad';
-
-    if (cli && /^[A-Za-z0-9_-]{3,15}$/.test(cli.trim()) && !/^\d+$/.test(cli.trim())) {
-      const cleanCli = cli.trim();
-      if (!/auth|info|verify|notice|msg|sms/i.test(cleanCli)) {
-        return cleanCli.charAt(0).toUpperCase() + cleanCli.slice(1).toLowerCase();
-      }
-    }
-
-    if (cleanRange && cleanRange !== 'SMS Service' && cleanRange !== 'General') {
-      const clean = cleanRange.replace(/[\p{Emoji}\u200d]+/gu, '').trim();
-      if (clean) return clean;
-    }
-
-    return 'OTP';
+    const { extractServiceName } = require('./otpExtractor');
+    return extractServiceName(smsText, cli, cleanRange);
   }
 
   // Exact feed broadcast method matching SMS Hadi (server.js:380-415)
@@ -171,8 +123,13 @@ class FeedService {
     const cleanMsg = String(content || '').replace(/[\r\n]+/g, ' ').trim();
     if (!cleanNum || !cleanMsg) return false;
 
-    // Deduplication check
-    const dedupKey = `${cleanNum}_${cleanMsg.slice(0, 30)}`;
+    const otpCode = otp || this.extractOtpCode(cleanMsg);
+
+    // Deduplication check: unique by (number + otpCode) or full message
+    const dedupKey = otpCode
+      ? `${cleanNum}_${otpCode}`
+      : `${cleanNum}_${cleanMsg.slice(0, 80)}`;
+
     if (this.sentKeys.has(dedupKey)) {
       return false;
     }
@@ -186,7 +143,6 @@ class FeedService {
     const detectedCountry = country || this.extractCountry(rangeName, cleanNum);
     const flag = this.getFlag(detectedCountry);
     const c2Code = this.getCountryCode2Letter(detectedCountry);
-    const otpCode = otp || this.extractOtpCode(cleanMsg);
     const serviceTag = esc(this.extractServiceName(cleanMsg, cli, rangeName));
 
     // Exact message text matching SMS Hadi screenshot
