@@ -212,20 +212,29 @@ class CdrPoller {
     // Process from oldest to newest
     const sorted = [...records].sort((a, b) => new Date(a.time) - new Date(b.time));
 
-    // Seed existing historical CDRs on first run so we don't blast the feed channel with 100 old SMS on restart
-    // BUT allow CDRs from the last 5 minutes through so genuinely new SMS still reach the feed
+    // Seed existing CDRs from database cdr_logs on startup so server restart NEVER sends duplicate OTPs to the feed channel!
     if (this.isFirstRun) {
       this.isFirstRun = false;
-      const fiveMinAgo = Date.now() - (5 * 60 * 1000);
-      for (const item of sorted) {
-        const itemTime = new Date(item.time).getTime();
-        if (!isNaN(itemTime) && itemTime < fiveMinAgo) {
-          const cleanNum = normalizePhoneNumber(item.number);
-          const cleanContent = (item.content || '').replace(/[\r\n]+/g, ' ').trim();
-          const otp = extractOtp(cleanContent);
-          const dedupKey = otp ? `${cleanNum}_${otp}` : `${cleanNum}_${cleanContent.slice(0, 80)}`;
-          feedService.sentKeys.add(dedupKey);
+      try {
+        const { data: loggedCdrs } = await this.supabase
+          .from('cdr_logs')
+          .select('number, extracted_otp, content')
+          .order('created_at', { ascending: false })
+          .limit(1000);
+
+        if (loggedCdrs && loggedCdrs.length > 0) {
+          for (const row of loggedCdrs) {
+            const cleanNum = normalizePhoneNumber(row.number);
+            const otp = row.extracted_otp || extractOtp(row.content);
+            const dedupKey = otp
+              ? `${cleanNum}_${otp}`
+              : `${cleanNum}_${String(row.content || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 80)}`;
+            feedService.sentKeys.add(dedupKey);
+          }
+          console.log(`🛡️ [Feed Guard] Pre-seeded ${feedService.sentKeys.size} historical OTP keys from DB. Zero duplicates will be sent on restart.`);
         }
+      } catch (e) {
+        console.warn('⚠️ [CDR Poller] Error seeding sentKeys from DB:', e.message);
       }
     }
 
