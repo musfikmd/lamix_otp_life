@@ -25,6 +25,7 @@ function MainApp() {
   const [selectedService, setSelectedService] = useState(null);
   const [activeNumbers, setActiveNumbers] = useState([]);
   const [smsMessages, setSmsMessages] = useState([]);
+  const [dailyOtpCount, setDailyOtpCount] = useState(0);
   const [toast, setToast] = useState(null);
   const [ads, setAds] = useState(null);
   const [showPopupAd, setShowPopupAd] = useState(true);
@@ -87,6 +88,7 @@ function MainApp() {
         if (data?.success) {
           if (data.activeNumbers) setActiveNumbers(data.activeNumbers);
           if (data.smsMessages) setSmsMessages(data.smsMessages);
+          if (typeof data.dailyOtpCount === 'number') setDailyOtpCount(data.dailyOtpCount);
           if (data.user) {
             setUser((prev) => ({
               ...prev,
@@ -208,6 +210,7 @@ function MainApp() {
               <InboxView
                 activeNumbers={activeNumbers}
                 smsMessages={smsMessages}
+                dailyOtpCount={dailyOtpCount}
                 onReleaseNumber={handleReleaseNumber}
                 onGoToServices={() => setActiveTab('services')}
                 ads={ads}
@@ -247,7 +250,7 @@ function MainApp() {
             activeTab={activeTab}
             setActiveTab={setActiveTab}
             activeNumbersCount={activeNumbers.length}
-            smsCount={smsMessages.length}
+            smsCount={dailyOtpCount}
           />
         </>
       )}

@@ -16,6 +16,7 @@ import { BannerAd } from './BannerAd';
 export const InboxView = ({ 
   activeNumbers = [], 
   smsMessages = [], 
+  dailyOtpCount,
   onReleaseNumber,
   onGoToServices,
   ads = null
@@ -29,6 +30,20 @@ export const InboxView = ({
     activeNumbers.length > 0 ? 'numbers' : (smsMessages.length > 0 ? 'otps' : 'numbers')
   );
   const prevSmsCountRef = useRef(smsMessages.length);
+
+  // Compute daily OTP count (messages received today, up to 1,000)
+  const currentDailyCount = useMemo(() => {
+    if (typeof dailyOtpCount === 'number' && dailyOtpCount >= 0) {
+      return dailyOtpCount;
+    }
+    const now = new Date();
+    const bdNow = new Date(now.getTime() + (6 * 60 * 60 * 1000));
+    const todayStartUtc = new Date(Date.UTC(bdNow.getUTCFullYear(), bdNow.getUTCMonth(), bdNow.getUTCDate(), -6, 0, 0, 0)).getTime();
+    return Math.min(1000, smsMessages.filter(s => {
+      const t = new Date(s.receivedAt).getTime();
+      return !isNaN(t) && t >= todayStartUtc;
+    }).length);
+  }, [dailyOtpCount, smsMessages]);
 
   // Auto-switch to OTPs tab when new SMS arrives
   useEffect(() => {
@@ -182,7 +197,7 @@ export const InboxView = ({
           <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
             activeTab === 'otps' ? 'bg-white/20 text-white' : 'bg-[#2D6A4F]/10 text-[#2D6A4F]'
           }`}>
-            {smsMessages.length}
+            {currentDailyCount}
           </span>
         </button>
       </div>
@@ -457,12 +472,17 @@ export const InboxView = ({
             <div className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-[#5C3824]" />
               <h2 className="text-xs font-black text-[#4A2E1F] uppercase tracking-wider">
-                Incoming OTP Inbox
+                Daily OTP Inbox
               </h2>
               <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-[#2D6A4F]/10 text-[#2D6A4F]">
-                {smsMessages.length} Messages
+                {currentDailyCount} / 1,000 Today
               </span>
             </div>
+            {smsMessages.length > currentDailyCount && (
+              <span className="text-[10px] font-semibold text-[#826A5C]">
+                Total: {smsMessages.length}
+              </span>
+            )}
           </div>
 
           {smsMessages.length === 0 ? (

@@ -175,8 +175,8 @@ app.get('/api/user-data', async (req, res) => {
   const [userRes, activeNumbersRes, cdrRes, txnRes, wdRes, refRes] = await Promise.all([
     supabase.from('users').select('*').eq('telegram_id', tgId).maybeSingle(),
     supabase.from('assigned_numbers').select('*').eq('telegram_id', tgId).eq('status', 'ACTIVE').gt('expires_at', nowIso).order('assigned_at', { ascending: false }).limit(100000),
-    supabase.from('cdr_logs').select('*').eq('telegram_id', tgId).order('cdr_time', { ascending: false }).limit(50),
-    supabase.from('transactions').select('*').eq('telegram_id', tgId).eq('type', 'EARNING').order('created_at', { ascending: false }).limit(50),
+    supabase.from('cdr_logs').select('*').eq('telegram_id', tgId).order('cdr_time', { ascending: false }).limit(1000),
+    supabase.from('transactions').select('*').eq('telegram_id', tgId).eq('type', 'EARNING').order('created_at', { ascending: false }).limit(1000),
     supabase.from('withdrawals').select('*').eq('telegram_id', tgId).order('requested_at', { ascending: false }).limit(50),
     supabase.from('referrals').select('*').eq('referrer_id', tgId).limit(100000)
   ]);
@@ -232,6 +232,18 @@ app.get('/api/user-data', async (req, res) => {
   // Sort newest first
   combinedSms.sort((a, b) => new Date(b.receivedAt) - new Date(a.receivedAt));
 
+  // Compute daily OTP count for today (Bangladesh Time UTC+6)
+  const now = new Date();
+  const bdTime = new Date(now.getTime() + (6 * 60 * 60 * 1000));
+  const todayStartUtc = new Date(Date.UTC(bdTime.getUTCFullYear(), bdTime.getUTCMonth(), bdTime.getUTCDate(), -6, 0, 0, 0));
+  const todayStartTime = todayStartUtc.getTime();
+
+  const todaySmsList = combinedSms.filter(s => {
+    const t = new Date(s.receivedAt).getTime();
+    return !isNaN(t) && t >= todayStartTime;
+  });
+  const dailyOtpCount = Math.min(1000, todaySmsList.length);
+
   // Match service icons from app_services
   const appServices = await appServiceManager.getAppServices();
   const serviceIconMap = {};
@@ -264,7 +276,9 @@ app.get('/api/user-data', async (req, res) => {
         status: a.status
       };
     }),
-    smsMessages: combinedSms,
+    dailyOtpCount,
+    dailyLimit: 1000,
+    smsMessages: combinedSms.slice(0, 1000),
     withdrawals: (wdRes.data || []).map(w => ({
       id: String(w.id),
       amount: Number(w.amount),
