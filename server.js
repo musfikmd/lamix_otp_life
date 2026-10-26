@@ -7,7 +7,7 @@ const crypto = require('crypto');
 require('dotenv').config();
 
 const { supabase } = require('./config/supabase');
-const { syncNumbersToDatabase } = require('./services/lamixApi');
+const { syncNumbersToDatabase, fetchAllSupabaseRows } = require('./services/lamixApi');
 const ClientBot = require('./services/clientBot');
 const AdminBot = require('./services/adminBot');
 const CdrPoller = require('./services/cdrPoller');
@@ -86,19 +86,41 @@ if (CLIENT_BOT_TOKEN && ADMIN_BOT_TOKEN) {
   adminBot.startPolling();
   cdrPoller.start();
 
-  // Initial Sync from Lamix to Supabase
-  syncNumbersToDatabase(supabase).catch(err => {
-    console.error('Startup number sync warning:', err.message);
-  });
+  // 🔄 Continuous Initial Sync: keeps syncing until ALL numbers from Lamix API are 100% in DB
+  const startContinuousPoolSync = async () => {
+    let allSynced = false;
+    let attempt = 1;
+    while (!allSynced) {
+      console.log(`🔄 [Continuous Sync Attempt ${attempt}] Syncing all numbers from Lamix API...`);
+      try {
+        const result = await syncNumbersToDatabase(supabase);
+        if (result && result.success && result.allRangesCompleted) {
+          allSynced = true;
+          console.log(`🎉 [Continuous Sync SUCCESS] All ${result.totalSynced || 0} numbers from Lamix API are 100% synchronized into database!`);
+        } else {
+          console.warn(`⚠️ [Continuous Sync] Incomplete sync (got ${result?.totalSynced || 0}/${result?.expectedTotal || '?'}). Retrying in 15 seconds...`);
+          await new Promise(r => setTimeout(r, 15000));
+        }
+      } catch (err) {
+        console.error('❌ [Continuous Sync Error]:', err.message, '- retrying in 15s...');
+        await new Promise(r => setTimeout(r, 15000));
+      }
+      attempt++;
+    }
 
-  // 🔄 Automatic Periodic Pool Sync & Dead Number Audit — every 25 minutes
-  console.log('🔄 [Pool Sync] Scheduled automated sync & dead number audit every 25 minutes.');
-  setInterval(() => {
-    console.log('🔄 [Scheduled 25m Pool Sync] Starting automated pool sync & dead number audit...');
-    syncNumbersToDatabase(supabase).catch(err => {
-      console.warn('⚠️ [Scheduled Pool Sync Error]:', err.message);
-    });
-  }, 25 * 60 * 1000);
+    // 🔄 Automatic Periodic Pool Sync & Stock Maintenance — every 5 minutes
+    console.log('🔄 [Pool Sync] Scheduled continuous background sync every 5 minutes.');
+    setInterval(() => {
+      console.log('🔄 [Scheduled 5m Pool Sync] Checking and updating Lamix stock...');
+      syncNumbersToDatabase(supabase).catch(err => {
+        console.warn('⚠️ [Scheduled Pool Sync Error]:', err.message);
+      });
+    }, 5 * 60 * 1000);
+  };
+
+  startContinuousPoolSync().catch(err => {
+    console.error('Fatal startup sync error:', err.message);
+  });
 } else {
   console.warn('⚠️ Both TELEGRAM_BOT_TOKEN and ADMIN_BOT_TOKEN are required in .env for full bot operation.');
 }
@@ -301,22 +323,32 @@ app.get('/api/user-data', async (req, res) => {
 app.get('/api/services', async (req, res) => {
   const dbServices = await appServiceManager.getAppServices();
 
-  const { data: poolNumbers } = supabase
-    ? await supabase.from('number_pool').select('range_id, range_name, prefix, country, is_assigned').limit(100000)
-    : { data: [] };
+  const poolNumbers = supabase
+    ? await fetchAllSupabaseRows(() =>
+        supabase.from('number_pool').select('range_id, range_name, prefix, country, is_assigned')
+      )
+    : [];
 
   const poolCounts = {};
   for (const item of (poolNumbers || [])) {
-    const k = item.range_id || item.prefix;
-    if (!poolCounts[k]) poolCounts[k] = 0;
-    if (!item.is_assigned) poolCounts[k]++;
+    if (!item.is_assigned) {
+      if (item.range_id) poolCounts[item.range_id] = (poolCounts[item.range_id] || 0) + 1;
+      if (item.prefix) {
+        const cleanP = String(item.prefix).replace(/\D/g, '');
+        poolCounts[cleanP] = (poolCounts[cleanP] || 0) + 1;
+      }
+      if (item.range_name) {
+        poolCounts[item.range_name] = (poolCounts[item.range_name] || 0) + 1;
+      }
+    }
   }
 
   const services = [];
   for (const srv of (dbServices || [])) {
     const mappings = await appServiceManager.getRangesForService(srv.id);
     const ranges = mappings.map(m => {
-      const stock = poolCounts[m.range_id] || poolCounts[m.prefix] || 0;
+      const cleanPrefix = m.prefix ? String(m.prefix).replace(/\D/g, '') : '';
+      const stock = poolCounts[m.range_id] || (cleanPrefix ? poolCounts[cleanPrefix] : 0) || (m.range_name ? poolCounts[m.range_name] : 0) || 0;
       const c = m.country || m.display_name || 'Global';
       const flag = getCountryFlag(c, m.prefix);
 
@@ -357,12 +389,13 @@ app.post('/api/claim-number', async (req, res) => {
   }
 
   // 1. Fetch currently active numbers to prevent collision
-  const { data: activeAssigned } = await supabase
-    .from('assigned_numbers')
-    .select('number')
-    .eq('status', 'ACTIVE')
-    .gt('expires_at', new Date().toISOString())
-    .limit(100000);
+  const activeAssigned = await fetchAllSupabaseRows(() =>
+    supabase
+      .from('assigned_numbers')
+      .select('number')
+      .eq('status', 'ACTIVE')
+      .gt('expires_at', new Date().toISOString())
+  );
 
   const activeNumSet = new Set((activeAssigned || []).map(a => String(a.number).replace(/\D/g, '')));
 
@@ -565,19 +598,23 @@ app.get('/api/admin/overview', async (req, res) => {
     });
   }
 
-  const [wdRes, poolRes, poolNumbersRes, srvRes, cdrRes] = await Promise.all([
+  const [wdRes, poolRes, poolNumbers, srvRes, cdrRes] = await Promise.all([
     supabase.from('withdrawals').select('*').eq('status', 'PENDING').order('requested_at', { ascending: false }).limit(100000),
     supabase.from('number_pool').select('*', { count: 'exact', head: true }),
-    supabase.from('number_pool').select('range_id, prefix, is_assigned').limit(100000),
+    fetchAllSupabaseRows(() => supabase.from('number_pool').select('range_id, prefix, is_assigned')),
     supabase.from('app_services').select('*').order('display_order', { ascending: true }).limit(100000),
     supabase.from('cdr_logs').select('*', { count: 'exact', head: true })
   ]);
 
   const poolCounts = {};
-  for (const item of (poolNumbersRes.data || [])) {
-    const k = item.range_id || item.prefix;
-    if (!poolCounts[k]) poolCounts[k] = 0;
-    if (!item.is_assigned) poolCounts[k]++;
+  for (const item of (poolNumbers || [])) {
+    if (!item.is_assigned) {
+      if (item.range_id) poolCounts[item.range_id] = (poolCounts[item.range_id] || 0) + 1;
+      if (item.prefix) {
+        const cleanP = String(item.prefix).replace(/\D/g, '');
+        poolCounts[cleanP] = (poolCounts[cleanP] || 0) + 1;
+      }
+    }
   }
 
   const srvList = (srvRes.data && srvRes.data.length > 0) ? srvRes.data : await appServiceManager.getAppServices();

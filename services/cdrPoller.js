@@ -1,6 +1,6 @@
 'use strict';
 
-const { getCdrs, extractOtp, USD_TO_BDT } = require('./lamixApi');
+const { getCdrs, extractOtp, USD_TO_BDT, fetchAllSupabaseRows } = require('./lamixApi');
 const feedService = require('./feedService');
 
 function normalizePhoneNumber(value) {
@@ -65,14 +65,15 @@ class CdrPoller {
     if (!this.supabase) return;
     try {
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const { data, error } = await this.supabase
-        .from('assigned_numbers')
-        .select('*')
-        .gte('assigned_at', oneDayAgo)
-        .order('assigned_at', { ascending: false })
-        .limit(100000);
+      const data = await fetchAllSupabaseRows(() =>
+        this.supabase
+          .from('assigned_numbers')
+          .select('*')
+          .gte('assigned_at', oneDayAgo)
+          .order('assigned_at', { ascending: false })
+      );
 
-      if (!error && data) {
+      if (data && data.length > 0) {
         this.assignedCache.clear();
         for (const row of data) {
           const norm = normalizePhoneNumber(row.number);
@@ -168,14 +169,15 @@ class CdrPoller {
     if (!this.supabase) return;
     try {
       const nowIso = new Date().toISOString();
-      const { data: expired, error } = await this.supabase
-        .from('assigned_numbers')
-        .select('id, number')
-        .eq('status', 'ACTIVE')
-        .lt('expires_at', nowIso)
-        .limit(100000);
+      const expired = await fetchAllSupabaseRows(() =>
+        this.supabase
+          .from('assigned_numbers')
+          .select('id, number')
+          .eq('status', 'ACTIVE')
+          .lt('expires_at', nowIso)
+      );
 
-      if (error || !expired || expired.length === 0) return;
+      if (!expired || expired.length === 0) return;
 
       for (const item of expired) {
         await this.supabase

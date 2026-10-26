@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { fetchAllSupabaseRows } = require('./lamixApi');
 
 const SERVICES_FILE = path.join(__dirname, '..', 'data', 'app_services.json');
 const MAPPINGS_FILE = path.join(__dirname, '..', 'data', 'service_mappings.json');
@@ -202,12 +203,13 @@ class AppServiceManager {
     if (!this.supabase) return [];
 
     try {
-      const { data: poolNumbers } = await this.supabase
-        .from('number_pool')
-        .select('range_id, range_name, prefix, country, payout_bdt, is_assigned')
-        .limit(100000);
+      const poolNumbers = await fetchAllSupabaseRows(() =>
+        this.supabase
+          .from('number_pool')
+          .select('range_id, range_name, prefix, country, payout_bdt, is_assigned')
+      );
 
-      if (!poolNumbers) return [];
+      if (!poolNumbers || poolNumbers.length === 0) return [];
 
       const grouped = {};
       for (const item of poolNumbers) {

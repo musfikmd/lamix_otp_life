@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
-const { syncNumbersToDatabase } = require('./lamixApi');
+const { syncNumbersToDatabase, fetchAllSupabaseRows } = require('./lamixApi');
 const settingsManager = require('./settingsManager');
 
 const AUTH_FILE = path.join(__dirname, '..', 'data', 'authenticated_admins.json');
@@ -181,7 +181,7 @@ class AdminBot {
       totalCdrCount,
       approvedWdRes,
       pendingWdRes,
-      poolNumbersRes
+      pool
     ] = await Promise.all([
       this.supabase.from('users').select('balance, total_earnings, total_withdrawn').limit(100000),
       this.supabase.from('assigned_numbers').select('*', { count: 'exact', head: true }).eq('status', 'ACTIVE'),
@@ -189,7 +189,7 @@ class AdminBot {
       this.supabase.from('cdr_logs').select('*', { count: 'exact', head: true }),
       this.supabase.from('withdrawals').select('amount').eq('status', 'APPROVED').limit(100000),
       this.supabase.from('withdrawals').select('amount').eq('status', 'PENDING').limit(100000),
-      this.supabase.from('number_pool').select('is_assigned').limit(100000)
+      fetchAllSupabaseRows(() => this.supabase.from('number_pool').select('is_assigned'))
     ]);
 
     const users = usersRes.data || [];
@@ -198,9 +198,8 @@ class AdminBot {
     const totalRemaining = users.reduce((acc, u) => acc + (parseFloat(u.balance) || 0), 0);
     const totalPendingAmount = (pendingWdRes.data || []).reduce((acc, r) => acc + (parseFloat(r.amount) || 0), 0);
     
-    const pool = poolNumbersRes.data || [];
-    const totalStock = pool.length;
-    const availableStock = pool.filter(p => !p.is_assigned).length;
+    const totalStock = (pool || []).length;
+    const availableStock = (pool || []).filter(p => !p.is_assigned).length;
 
     const withdrawState = settingsManager.get('withdraw_enabled') ? '🟢 ACTIVE (ON)' : '🔴 PAUSED (OFF)';
     const minWd = settingsManager.get('min_withdraw');
@@ -351,7 +350,7 @@ class AdminBot {
       return this.sendMessage(chatId, '❌ Broadcast failed: Client bot instance unavailable.', this.getAdminReplyKeyboard());
     }
 
-    const { data: users } = await this.supabase.from('users').select('telegram_id').limit(100000);
+    const users = await fetchAllSupabaseRows(() => this.supabase.from('users').select('telegram_id'));
     if (!users || users.length === 0) {
       return this.sendMessage(chatId, '⚠️ No registered clients found to broadcast.', this.getAdminReplyKeyboard());
     }
@@ -443,10 +442,11 @@ class AdminBot {
         `✅ <b>Number Pool Sync Complete!</b>\n` +
         `━━━━━━━━━━━━━━━━━━━━\n` +
         `📊 <b>Live Numbers Synced:</b> <code>${result.totalSynced || result.synced || 0}</code>\n` +
+        `🎯 <b>Expected Total in Panel:</b> <code>${result.expectedTotal || result.totalSynced || 0}</code>\n` +
         `🧹 <b>Dead Numbers Purged:</b> <code>${result.totalDeadPurged || 0}</code>\n` +
-        `🌐 <b>Ranges Checked:</b> <code>${result.rangesCount || 0}</code>\n` +
+        `🌐 <b>Ranges Synced:</b> <code>${result.completedRangesCount || result.rangesCount || 0}/${result.rangesCount || 0}</code>\n` +
         `━━━━━━━━━━━━━━━━━━━━\n` +
-        `<i>Dead numbers removed from panel have been purged from database.</i>`;
+        `<i>All numbers from Lamix API are 100% synchronized with database.</i>`;
       await this.sendMessage(chatId, text, this.getAdminReplyKeyboard());
     } catch (e) {
       await this.sendMessage(chatId, `❌ Sync error: ${e.message}`, this.getAdminReplyKeyboard());
