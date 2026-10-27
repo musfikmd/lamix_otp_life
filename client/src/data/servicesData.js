@@ -14,10 +14,7 @@ export const SAMPLE_ASSIGNED_NUMBERS = [];
 export const SAMPLE_SMS_MESSAGES = [];
 
 export const WITHDRAWAL_METHODS = [
-  { id: 'bkash', name: 'bKash Personal', icon: '💖', fee: '0%', min: 20, max: 25000, color: '#e2136e' },
-  { id: 'nagad', name: 'Nagad Personal', icon: '🟠', fee: '0%', min: 20, max: 25000, color: '#f7931e' },
-  { id: 'binance', name: 'Binance Pay ID / USDT', icon: '🟡', fee: '0%', min: 100, max: 100000, color: '#f3ba2f' },
-  { id: 'rocket', name: 'Rocket Personal', icon: '🟣', fee: '0%', min: 50, max: 25000, color: '#8c288f' }
+  { id: 'binance', name: 'Binance Pay ID / USDT', icon: '🟡', fee: '0%', min: 20, max: 100000, color: '#f3ba2f' }
 ];
 
 export const SAMPLE_WITHDRAWALS = [];

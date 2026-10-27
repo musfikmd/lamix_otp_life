@@ -238,11 +238,22 @@ class AdminBot {
     await this.sendMessage(chatId, `📋 <b>Pending Withdrawals (${list.length}):</b>`);
 
     for (const wd of list) {
+      const isBinance = String(wd.method || '').toLowerCase().includes('binance');
+      const usdtVal = (Number(wd.amount) / 125).toFixed(2);
+      const centsVal = (Number(wd.amount) / 1.25).toFixed(0);
+      const amountDisplay = isBinance 
+        ? `<b>৳${wd.amount} BDT</b> (≈ $${usdtVal} USDT / ${centsVal}¢)`
+        : `<b>৳${wd.amount} BDT</b>`;
+
+      const accountLine = isBinance
+        ? `🏦 Method: <b>Binance Pay ID / USDT</b>\n🟡 Pay ID: <code>${wd.wallet_address}</code> <i>(Tap to copy)</i>`
+        : `🏦 Method & Account: <b>${wd.method}</b> (<code>${wd.wallet_address}</code>)`;
+
       const card =
         `💳 <b>Withdrawal Request #${wd.id}</b>\n` +
         `👤 User ID: <code>${wd.telegram_id}</code>\n` +
-        `💰 Amount: <b>৳${wd.amount} BDT</b>\n` +
-        `🏦 Method & Account: <b>${wd.method} (${wd.wallet_address})</b>\n` +
+        `💰 Amount: ${amountDisplay}\n` +
+        `${accountLine}\n` +
         `🕒 Requested: ${new Date(wd.requested_at).toLocaleString()}`;
 
       const buttons = {
@@ -299,8 +310,14 @@ class AdminBot {
     let text = `📜 <b>Recent Processed Withdrawals:</b>\n━━━━━━━━━━━━━━━━━━━━\n\n`;
     history.forEach((w) => {
       const icon = w.status === 'APPROVED' ? '✅' : '❌';
-      text += `${icon} <b>#${w.id}</b> — <b>৳${w.amount} BDT</b> (${w.method})\n` +
-              `   User: <code>${w.telegram_id}</code> | ${w.wallet_address}\n` +
+      const isBinance = String(w.method || '').toLowerCase().includes('binance');
+      const usdtVal = (Number(w.amount) / 125).toFixed(2);
+      const amountText = isBinance 
+        ? `৳${w.amount} (≈ $${usdtVal})`
+        : `৳${w.amount} BDT`;
+
+      text += `${icon} <b>#${w.id}</b> — <b>${amountText}</b> (${w.method})\n` +
+              `   User: <code>${w.telegram_id}</code> | Pay ID: <code>${w.wallet_address}</code>\n` +
               `   Status: <b>${w.status}</b> (${new Date(w.processed_at || w.requested_at).toLocaleTimeString()})\n\n`;
     });
 
@@ -668,11 +685,30 @@ class AdminBot {
 
   // Instant 1-click notification when user submits withdrawal
   async sendWithdrawalAlert(data) {
+    const isBinance = String(data.details || '').toLowerCase().includes('binance') || String(data.method || '').toLowerCase().includes('binance');
+    const usdtVal = (Number(data.amount) / 125).toFixed(2);
+    const centsVal = (Number(data.amount) / 1.25).toFixed(0);
+    const amountDisplay = isBinance 
+      ? `<b>৳${data.amount} BDT</b> (≈ $${usdtVal} USDT / ${centsVal}¢)`
+      : `<b>৳${data.amount} BDT</b>`;
+
+    let payId = data.walletAddress;
+    if (!payId && data.details) {
+      const match = String(data.details).match(/\(([^)]+)\)/);
+      payId = match ? match[1] : data.details;
+    }
+    payId = payId || 'N/A';
+
+    const accountLine = isBinance
+      ? `🏦 Method: <b>Binance Pay ID / USDT</b>\n` +
+        `🟡 Pay ID: <code>${payId}</code> <i>(Tap to copy)</i>`
+      : `🏦 Method & Account: <b>${data.method || 'Account'}</b> (<code>${payId}</code>)`;
+
     const msg =
       `🚨 <b>New Withdrawal Request!</b>\n━━━━━━━━━━━━━━━━━━━━\n\n` +
       `👤 User: @${data.username} (ID: <code>${data.telegramId}</code>)\n` +
-      `💰 Amount: <b>৳${data.amount} BDT</b>\n` +
-      `🏦 Account: <b>${data.details}</b>\n\n` +
+      `💰 Amount: ${amountDisplay}\n` +
+      `${accountLine}\n\n` +
       `<i>Approve or reject below:</i>`;
 
     const buttons = {

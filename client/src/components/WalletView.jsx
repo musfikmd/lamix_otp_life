@@ -46,15 +46,24 @@ export const WalletView = ({ onWithdrawSubmit, ads = null }) => {
     setErrorMsg('');
     setSuccessMsg('');
 
-    const withdrawAmount = parseFloat(amount);
+    let withdrawAmount = parseFloat(amount);
     if (isNaN(withdrawAmount) || withdrawAmount <= 0) {
       setErrorMsg('Please enter a valid amount!');
       triggerHaptic('error');
       return;
     }
 
+    // Auto-convert if user entered in cents/USDT (e.g. 0.16 or 0.16 USDT)
+    if (selectedMethod.id === 'binance' && withdrawAmount < 1 && withdrawAmount >= 0.10) {
+      withdrawAmount = Number((withdrawAmount * 125).toFixed(2));
+    }
+
     if (withdrawAmount < selectedMethod.min) {
-      setErrorMsg(`Minimum withdrawal for ${selectedMethod.name} is ৳${selectedMethod.min} BDT!`);
+      if (selectedMethod.id === 'binance') {
+        setErrorMsg('Minimum withdrawal for Binance is ৳20 BDT (16¢ / $0.16 USDT)!');
+      } else {
+        setErrorMsg(`Minimum withdrawal for ${selectedMethod.name} is ৳${selectedMethod.min} BDT!`);
+      }
       triggerHaptic('error');
       return;
     }
@@ -218,7 +227,7 @@ export const WalletView = ({ onWithdrawSubmit, ads = null }) => {
             <span>Request Withdrawal</span>
           </h3>
           <span className="text-xs text-[#826A5C] font-semibold">
-            Min ৳{selectedMethod.min}
+            Min ৳{selectedMethod.min} {selectedMethod.id === 'binance' ? '($0.16 / 16¢)' : ''}
           </span>
         </div>
 
@@ -240,9 +249,9 @@ export const WalletView = ({ onWithdrawSubmit, ads = null }) => {
           {/* Method selector */}
           <div>
             <label className="text-xs font-bold text-[#4A2E1F] block mb-2 uppercase tracking-wider">
-              Select Payout Method
+              Payout Method
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2">
               {WITHDRAWAL_METHODS.map((method) => {
                 const isSelected = selectedMethod.id === method.id;
                 return (
@@ -253,22 +262,27 @@ export const WalletView = ({ onWithdrawSubmit, ads = null }) => {
                       triggerHaptic('selection');
                       setSelectedMethod(method);
                     }}
-                    className={`p-3 rounded-2xl border text-left transition-all ${
+                    className={`p-3.5 rounded-2xl border text-left transition-all ${
                       isSelected
                         ? 'bg-[#FAF7F2] border-[#5C3824] shadow-sm'
                         : 'bg-[#FFFFFF] border-[#EBE3D8] hover:border-[#D5C6B6]'
                     }`}
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl">{method.icon}</span>
-                      <div>
-                        <div className="text-xs font-bold text-[#26160F]">
-                          {method.name}
-                        </div>
-                        <div className="text-[10px] text-[#826A5C]">
-                          Min: ৳{method.min}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{method.icon}</span>
+                        <div>
+                          <div className="text-sm font-bold text-[#26160F]">
+                            {method.name}
+                          </div>
+                          <div className="text-xs text-[#826A5C]">
+                            Min: ৳{method.min} <span className="text-amber-600 font-bold">(16¢ / $0.16 USDT)</span>
+                          </div>
                         </div>
                       </div>
+                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-900 border border-amber-400/30">
+                        ⚡ Available
+                      </span>
                     </div>
                   </button>
                 );
@@ -278,18 +292,26 @@ export const WalletView = ({ onWithdrawSubmit, ads = null }) => {
 
           {/* Amount input */}
           <div>
-            <label className="text-xs font-bold text-[#4A2E1F] block mb-1 uppercase tracking-wider">
-              Amount (৳ BDT)
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-bold text-[#4A2E1F] uppercase tracking-wider">
+                Amount (৳ BDT)
+              </label>
+              {selectedMethod.id === 'binance' && (
+                <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                  ৳20 = 16¢ ($0.16 USDT)
+                </span>
+              )}
+            </div>
             <div className="relative">
               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-[#826A5C]">
                 ৳
               </span>
               <input
                 type="number"
+                step="any"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                placeholder={`Min ${selectedMethod.min}`}
+                placeholder={selectedMethod.id === 'binance' ? 'Min 20 (or 16¢)' : `Min ${selectedMethod.min}`}
                 className="w-full bg-[#FAF7F2] border border-[#EBE3D8] rounded-2xl pl-8 pr-20 py-2.5 text-sm text-[#26160F] font-mono focus:outline-none focus:border-[#5C3824] transition-colors"
               />
               <button
@@ -300,6 +322,110 @@ export const WalletView = ({ onWithdrawSubmit, ads = null }) => {
                 Max All
               </button>
             </div>
+
+            {/* Quick Chips */}
+            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+              {selectedMethod.id === 'binance' ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setAmount('20');
+                    }}
+                    className={`text-[11px] font-bold px-2.5 py-1 rounded-xl transition-all ${
+                      amount === '20'
+                        ? 'bg-amber-600 text-white shadow-sm'
+                        : 'bg-[#FAF7F2] border border-[#EBE3D8] text-[#5C3824] hover:bg-[#F3EFEA]'
+                    }`}
+                  >
+                    ⚡ ৳20 (16¢)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setAmount('50');
+                    }}
+                    className={`text-[11px] font-bold px-2.5 py-1 rounded-xl transition-all ${
+                      amount === '50'
+                        ? 'bg-amber-600 text-white shadow-sm'
+                        : 'bg-[#FAF7F2] border border-[#EBE3D8] text-[#5C3824] hover:bg-[#F3EFEA]'
+                    }`}
+                  >
+                    ৳50 (40¢)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setAmount('100');
+                    }}
+                    className={`text-[11px] font-bold px-2.5 py-1 rounded-xl transition-all ${
+                      amount === '100'
+                        ? 'bg-amber-600 text-white shadow-sm'
+                        : 'bg-[#FAF7F2] border border-[#EBE3D8] text-[#5C3824] hover:bg-[#F3EFEA]'
+                    }`}
+                  >
+                    ৳100 (80¢)
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setAmount(String(selectedMethod.min));
+                    }}
+                    className="text-[11px] font-bold px-2.5 py-1 rounded-xl bg-[#FAF7F2] border border-[#EBE3D8] text-[#5C3824] hover:bg-[#F3EFEA]"
+                  >
+                    Min: ৳{selectedMethod.min}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setAmount('50');
+                    }}
+                    className="text-[11px] font-bold px-2.5 py-1 rounded-xl bg-[#FAF7F2] border border-[#EBE3D8] text-[#5C3824] hover:bg-[#F3EFEA]"
+                  >
+                    ৳50
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setAmount('100');
+                    }}
+                    className="text-[11px] font-bold px-2.5 py-1 rounded-xl bg-[#FAF7F2] border border-[#EBE3D8] text-[#5C3824] hover:bg-[#F3EFEA]"
+                  >
+                    ৳100
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Binance USDT Conversion Details Card */}
+            {selectedMethod.id === 'binance' && (
+              <div className="mt-2.5 p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 flex items-center justify-between text-xs text-amber-900">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-base">🟡</span>
+                  <div>
+                    <span className="font-bold text-[11px] block text-amber-950">Binance Pay USDT Equivalent:</span>
+                    <span className="font-mono font-black text-amber-800 text-xs">
+                      {amount && Number(amount) > 0
+                        ? `≈ $${(Number(amount) >= 1 ? Number(amount) / 125 : Number(amount)).toFixed(2)} USDT (${(Number(amount) >= 1 ? Number(amount) / 1.25 : Number(amount) * 100).toFixed(0)}¢)`
+                        : '≈ $0.16 USDT (16 Cent) for ৳20'}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-amber-700/80 block">Binance Rate:</span>
+                  <span className="text-[10px] font-mono font-bold text-amber-900">1 USDT ≈ ৳125 BDT</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Account Address / Number input */}
@@ -311,7 +437,7 @@ export const WalletView = ({ onWithdrawSubmit, ads = null }) => {
               type="text"
               value={walletAddress}
               onChange={(e) => setWalletAddress(e.target.value)}
-              placeholder="e.g. 017xxxxxxxx or Binance Pay ID"
+              placeholder={selectedMethod.id === 'binance' ? 'e.g. Binance Pay ID (e.g. 123456789)' : 'e.g. 017xxxxxxxx'}
               className="w-full bg-[#FAF7F2] border border-[#EBE3D8] rounded-2xl px-3.5 py-2.5 text-sm text-[#26160F] font-mono focus:outline-none focus:border-[#5C3824] transition-colors"
             />
           </div>
@@ -356,6 +482,11 @@ export const WalletView = ({ onWithdrawSubmit, ads = null }) => {
                   <div className="font-mono font-black text-[#5C3824]">
                     ৳{Number(item.amount).toFixed(2)}
                   </div>
+                  {String(item.method).toLowerCase().includes('binance') && (
+                    <div className="text-[10px] font-mono text-amber-700 font-bold">
+                      ≈ ${(Number(item.amount) / 125).toFixed(2)} USDT ({(Number(item.amount) / 1.25).toFixed(0)}¢)
+                    </div>
+                  )}
                   <span
                     className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
                       item.status === 'APPROVED'
@@ -398,6 +529,11 @@ export const WalletView = ({ onWithdrawSubmit, ads = null }) => {
               <h3 className="text-base font-black text-white">
                 Confirm ৳{pendingWithdrawData.withdrawAmount} BDT Payout
               </h3>
+              {pendingWithdrawData.method.toLowerCase().includes('binance') && (
+                <div className="inline-block text-xs text-amber-300 font-bold bg-amber-400/15 px-2.5 py-1 rounded-full border border-amber-400/30">
+                  ≈ ${(pendingWithdrawData.withdrawAmount / 125).toFixed(2)} USDT ({(pendingWithdrawData.withdrawAmount / 1.25).toFixed(0)}¢)
+                </div>
+              )}
               <p className="text-xs text-[#E8D7CC] leading-relaxed">
                 To process your withdrawal to <b>{pendingWithdrawData.method}</b> with <b>0% fee</b>, please view this sponsored partner offer to verify your request.
               </p>
@@ -411,6 +547,11 @@ export const WalletView = ({ onWithdrawSubmit, ads = null }) => {
               <div className="text-right">
                 <span className="text-[10px] text-stone-400 block">Amount:</span>
                 <span className="font-mono font-bold text-emerald-400">৳{pendingWithdrawData.withdrawAmount} BDT</span>
+                {pendingWithdrawData.method.toLowerCase().includes('binance') && (
+                  <span className="text-[10px] font-mono font-bold text-amber-300 block">
+                    ≈ ${(pendingWithdrawData.withdrawAmount / 125).toFixed(2)} USDT ({(pendingWithdrawData.withdrawAmount / 1.25).toFixed(0)}¢)
+                  </span>
+                )}
               </div>
             </div>
 

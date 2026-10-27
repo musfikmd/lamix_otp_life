@@ -518,8 +518,14 @@ app.post('/api/release-number', async (req, res) => {
 // Submit Withdrawal
 app.post('/api/withdraw', async (req, res) => {
   const { userId, amount, method, walletAddress } = req.body;
-  const withdrawAmount = parseFloat(amount);
+  let withdrawAmount = parseFloat(amount);
   const tgId = userId || 123456789;
+
+  const isBinance = String(method || '').toLowerCase().includes('binance');
+  // Auto-convert if user entered in cents/USDT (e.g. 0.16 USDT -> 20 BDT)
+  if (isBinance && !isNaN(withdrawAmount) && withdrawAmount > 0 && withdrawAmount < 1) {
+    withdrawAmount = Number((withdrawAmount * 125).toFixed(2));
+  }
 
   if (!settingsManager.get('withdraw_enabled')) {
     return res.status(400).json({ error: 'Withdrawals are currently paused.' });
@@ -527,7 +533,7 @@ app.post('/api/withdraw', async (req, res) => {
 
   const minWithdraw = settingsManager.get('min_withdraw') || 20;
   if (isNaN(withdrawAmount) || withdrawAmount < minWithdraw) {
-    return res.status(400).json({ error: `Minimum withdrawal is ৳${minWithdraw} BDT.` });
+    return res.status(400).json({ error: `Minimum withdrawal is ৳${minWithdraw} BDT${isBinance ? ' (16¢ / $0.16 USDT)' : ''}.` });
   }
 
   if (!supabase) {
@@ -555,7 +561,7 @@ app.post('/api/withdraw', async (req, res) => {
     .insert({
       telegram_id: tgId,
       amount: withdrawAmount,
-      method: method || 'bKash',
+      method: method || 'Binance Pay ID / USDT',
       wallet_address: walletAddress || 'N/A',
       status: 'PENDING'
     })
@@ -564,12 +570,18 @@ app.post('/api/withdraw', async (req, res) => {
 
   // Push notification to Admin Bot
   if (adminBot && wd) {
+    const usdtVal = (withdrawAmount / 125).toFixed(2);
+    const centsVal = (withdrawAmount / 1.25).toFixed(0);
     adminBot.sendWithdrawalAlert({
       id: wd.id,
       telegramId: tgId,
       username: user.username || `user_${tgId}`,
       amount: withdrawAmount,
-      details: `${method} (${walletAddress})`
+      method: method,
+      walletAddress: walletAddress || 'N/A',
+      details: isBinance 
+        ? `${method} (${walletAddress}) [≈ $${usdtVal} USDT / ${centsVal}¢]`
+        : `${method} (${walletAddress})`
     });
   }
 
